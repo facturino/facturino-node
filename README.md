@@ -1,0 +1,172 @@
+# Facturino Node.js SDK
+
+[![npm](https://img.shields.io/npm/v/@facturino/node)](https://www.npmjs.com/package/@facturino/node)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Official Node.js / TypeScript client for the [Facturino API](https://facturino.com/docs/api). Requires Node 18+.
+
+## Installation
+
+```bash
+npm install @facturino/node
+```
+
+## Usage
+
+```typescript
+import Facturino from '@facturino/node'
+
+const facturino = new Facturino('fac_test_xxx')
+
+const invoice = await facturino.invoices.create({
+  customer: 'cus_xxx',
+  items: [{
+    description: 'Consulting',
+    quantity: 1,
+    unit_price: 10000,  // 100.00 EUR
+    vat_rate: 2000,     // 20.00%
+  }],
+})
+
+const finalized = await facturino.invoices.finalize(invoice.id)
+```
+
+## Configuration
+
+```typescript
+const facturino = new Facturino('fac_test_xxx', {
+  maxRetries: 3,      // retries on 429/5xx
+  timeout: 30000,     // ms
+  apiVersion: '2026-02-01',
+})
+```
+
+## Amounts
+
+Monetary values are integers in **centimes** (10000 = 100.00 EUR).
+VAT rates are integers in **centipercent** (2000 = 20.00%).
+
+## Pagination
+
+```typescript
+// Auto-paginate
+for await (const inv of facturino.invoices.list({ limit: 25 })) {
+  console.log(inv.id)
+}
+
+// Single page
+const page = await facturino.invoices.list({ status: 'draft' })
+```
+
+## Resources
+
+```typescript
+// Invoices
+facturino.invoices.create(params)
+facturino.invoices.get('inv_xxx')
+facturino.invoices.update('inv_xxx', params)
+facturino.invoices.del('inv_xxx')
+facturino.invoices.finalize('inv_xxx')
+facturino.invoices.send('inv_xxx')
+facturino.invoices.getPdf('inv_xxx')
+facturino.invoices.getFacturx('inv_xxx')
+facturino.invoices.getXml('inv_xxx', 'cii')
+
+// Payments (sub-resource)
+facturino.invoices.payments.create('inv_xxx', { amount: 10000, method: 'transfer', paidAt: '...' })
+facturino.invoices.payments.list('inv_xxx')
+
+// Customers
+facturino.customers.create(params)
+facturino.customers.lookup({ siret: '12345678901234' })
+
+// Quotes
+facturino.quotes.create(params)
+facturino.quotes.send('quo_xxx')
+facturino.quotes.accept('quo_xxx')
+facturino.quotes.convert('quo_xxx')  // -> draft invoice
+
+// Credit Notes
+facturino.creditNotes.create(params)
+facturino.creditNotes.finalize('crn_xxx')
+
+// Recurring Invoices
+facturino.recurringInvoices.create(params)
+facturino.recurringInvoices.activate('rin_xxx')
+
+// E-Reporting
+facturino.ereporting.createDeclaration(params)
+facturino.ereporting.submitDeclaration('erp_xxx')
+
+// Exports
+facturino.exports.generateFec({ period_start: '2026-01-01', period_end: '2026-12-31' })
+
+// Jobs
+facturino.jobs.poll('job_xxx')  // wait for async completion
+
+// Sandbox (test mode only)
+facturino.sandbox.resetData()
+facturino.sandbox.simulateStatus('inv_xxx', { status: 'approved' })
+
+// Also: companies, members, apiKeys, events, webhookEndpoints, products
+```
+
+## Webhooks
+
+```typescript
+app.post('/webhooks', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    const event = facturino.webhooks.constructEvent(
+      req.body,
+      req.headers['facturino-signature'] as string,
+      'whsec_xxx',
+    )
+    console.log(event.type, event.data.id)
+    res.json({ received: true })
+  } catch (err) {
+    res.status(400).send('Invalid signature')
+  }
+})
+```
+
+## Idempotency
+
+```typescript
+await facturino.invoices.create(params, { idempotencyKey: 'unique-id' })
+```
+
+## Errors
+
+```typescript
+import { ApiError, RateLimitError, NotFoundError } from '@facturino/node'
+
+try {
+  await facturino.invoices.get('inv_xxx')
+} catch (err) {
+  if (err instanceof NotFoundError) { /* 404 */ }
+  if (err instanceof RateLimitError) { console.log(err.retryAfter) }
+  if (err instanceof ApiError) { console.log(err.code, err.requestId) }
+}
+```
+
+## TypeScript
+
+All types are exported:
+
+```typescript
+import type { Invoice, Customer, WebhookEvent } from '@facturino/node'
+```
+
+## Development
+
+```bash
+git clone https://github.com/facturino/facturino-node.git
+cd facturino-node
+npm install
+npm test
+npm run build
+```
+
+## License
+
+MIT
