@@ -15,6 +15,9 @@ import { Exports } from './resources/exports.js'
 import { EReportingResource } from './resources/ereporting.js'
 import { Jobs } from './resources/jobs.js'
 import { Sandbox } from './resources/sandbox.js'
+import { ReceivedInvoices } from './resources/received-invoices.js'
+import { Mfa } from './resources/mfa.js'
+import { Reporting } from './resources/reporting.js'
 import type { FacturinoConfig } from './types.js'
 
 /** Facturino API client for French e-invoicing — initialize with your API key to access all resources. */
@@ -35,6 +38,9 @@ class Facturino {
   readonly jobs: Jobs
   readonly sandbox: Sandbox
   readonly webhooks: Webhooks
+  readonly receivedInvoices: ReceivedInvoices
+  readonly mfa: Mfa
+  readonly reporting: Reporting
 
   constructor(apiKey: string, config?: FacturinoConfig) {
     const client = new HttpClient(apiKey, config)
@@ -55,6 +61,9 @@ class Facturino {
     this.jobs = new Jobs(client)
     this.sandbox = new Sandbox(client)
     this.webhooks = new Webhooks()
+    this.receivedInvoices = new ReceivedInvoices(client)
+    this.mfa = new Mfa(client)
+    this.reporting = new Reporting(client)
   }
 }
 
@@ -164,6 +173,24 @@ export type {
   SandboxResetResponse,
   SimulateStatusParams,
   SimulateStatusResponse,
+  ReceivedInvoiceStatus,
+  ReceivedInvoice,
+  ReceivedInvoiceListParams,
+  ReceivedInvoiceRefuseParams,
+  ReceivedInvoiceRecordPaymentParams,
+  ReceivedInvoiceActionResponse,
+  MfaSetupResponse,
+  MfaVerifyParams,
+  MfaVerifyResponse,
+  MfaDisableParams,
+  MfaDisableResponse,
+  MfaBackupCodesResponse,
+  VatReportParams,
+  VatReportBreakdown,
+  VatReport,
+  RevenueReportParams,
+  RevenueReportBreakdownItem,
+  RevenueReport,
 } from './types.js'
 
 export {

@@ -259,31 +259,55 @@ export interface Invoice {
 }
 
 export interface InvoiceCreateParams {
-  customer: string
+  customerId: string
   type?: InvoiceType
-  items: InvoiceLineItemParam[]
+  lines: InvoiceLineItemParam[]
+  buyer?: {
+    companyName: string
+    siret?: string
+    vatNumber?: string
+    address: Address
+    deliveryAddress?: Address
+  }
   dates?: Partial<InvoiceDates>
   payment?: Partial<InvoicePaymentTerms>
+  einvoicing?: {
+    format?: 'facturx' | 'ubl' | 'cii'
+    profile?: 'EN16931' | 'BASIC' | 'EXTENDED'
+  }
   notes?: string
+  purchaseOrderNumber?: string
   metadata?: Record<string, unknown>
 }
 
 export interface InvoiceLineItemParam {
   description: string
-  quantity: number
-  unit?: Unit
-  unit_price: number
-  vat_rate: number
-  vat_code?: VatCode
-  discount_percent?: number
-  product?: string
+  quantity: string
+  unit: Unit
+  unitPrice: number
+  vatRate: number
+  vatCode: VatCode
+  discountPercent?: number
+  product?: string | null
 }
 
 export interface InvoiceUpdateParams {
-  items?: InvoiceLineItemParam[]
+  buyer?: {
+    companyName: string
+    siret?: string
+    vatNumber?: string
+    address: Address
+    deliveryAddress?: Address
+  }
+  lines?: InvoiceLineItemParam[]
   dates?: Partial<InvoiceDates>
   payment?: Partial<InvoicePaymentTerms>
+  einvoicing?: {
+    format?: 'facturx' | 'ubl' | 'cii'
+    profile?: 'EN16931' | 'BASIC' | 'EXTENDED'
+  }
   notes?: string
+  purchaseOrderNumber?: string
   metadata?: Record<string, unknown>
 }
 
@@ -418,6 +442,8 @@ export interface CustomerCreateParams {
   paIdentifier?: string
   preferredFormat?: 'facturx' | 'ubl' | 'cii'
   receivingPaId?: string
+  recipientServiceCode?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface CustomerUpdateParams {
@@ -435,6 +461,7 @@ export interface CustomerUpdateParams {
   notes?: string
   paIdentifier?: string
   preferredFormat?: 'facturx' | 'ubl' | 'cii'
+  recipientServiceCode?: string
 }
 
 export interface CustomerListParams extends PaginationParams {
@@ -494,26 +521,24 @@ export interface PriceHistoryEntry {
 
 export interface ProductCreateParams {
   name: string
-  unit_price: number
-  vat_rate: number
-  vat_code?: VatCode
-  unit?: Unit
+  unitPrice: number
+  vatRate: number
+  vatCode: VatCode
+  unit: Unit
   description?: string
   reference?: string
   category?: string
-  tags?: string[]
 }
 
 export interface ProductUpdateParams {
   name?: string
-  unit_price?: number
-  vat_rate?: number
-  vat_code?: VatCode
+  unitPrice?: number
+  vatRate?: number
+  vatCode?: VatCode
   unit?: Unit
   description?: string
   reference?: string
   category?: string
-  tags?: string[]
   active?: boolean
 }
 
@@ -574,16 +599,20 @@ export interface Quote {
 }
 
 export interface QuoteCreateParams {
-  customer: string
-  items: InvoiceLineItemParam[]
+  customerId: string
+  lines: InvoiceLineItemParam[]
   dates?: Partial<QuoteDates>
+  validityDays?: number
   notes?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface QuoteUpdateParams {
-  items?: InvoiceLineItemParam[]
+  lines?: InvoiceLineItemParam[]
   dates?: Partial<QuoteDates>
+  validityDays?: number
   notes?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface QuoteListParams extends PaginationParams {
@@ -634,19 +663,22 @@ export interface CreditNote {
 }
 
 export interface CreditNoteCreateParams {
-  customer: string
-  related_invoice_id: string
-  credit_note_type: CreditNoteType
-  reason_code: CreditNoteReasonCode
+  customerId: string
+  relatedInvoiceId: string
+  creditNoteType: CreditNoteType
+  reasonCode: CreditNoteReasonCode
   reason?: string
   items: InvoiceLineItemParam[]
+  dates?: { issued: string }
   notes?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface CreditNoteUpdateParams {
   items?: InvoiceLineItemParam[]
   reason?: string
   notes?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface CreditNoteListParams extends PaginationParams {
@@ -797,35 +829,35 @@ export interface RecurringInvoice {
 }
 
 export interface RecurringInvoiceCreateParams {
-  customer_id: string
+  customerId: string
   frequency: RecurringFrequency
-  start_date: string
-  end_date?: string
-  custom_interval?: number
-  custom_unit?: 'days' | 'weeks' | 'months'
-  template_invoice: {
+  startDate: string
+  nextGenerationDate: string
+  endDate?: string
+  customIntervalDays?: number
+  templateInvoice: {
     items: InvoiceLineItemParam[]
     notes?: string
-    payment_method?: PaymentMethod
-    payment_terms_days?: number
+    paymentMethod?: PaymentMethod
+    paymentTermsDays?: number
   }
-  auto_finalize?: boolean
-  auto_send?: boolean
+  autoFinalize?: boolean
+  autoSend?: boolean
 }
 
 export interface RecurringInvoiceUpdateParams {
   frequency?: RecurringFrequency
-  end_date?: string | null
-  custom_interval?: number
-  custom_unit?: 'days' | 'weeks' | 'months'
-  template_invoice?: {
+  nextGenerationDate?: string
+  endDate?: string
+  customIntervalDays?: number
+  templateInvoice?: {
     items?: InvoiceLineItemParam[]
     notes?: string
-    payment_method?: PaymentMethod
-    payment_terms_days?: number
+    paymentMethod?: PaymentMethod
+    paymentTermsDays?: number
   }
-  auto_finalize?: boolean
-  auto_send?: boolean
+  autoFinalize?: boolean
+  autoSend?: boolean
 }
 
 export interface RecurringInvoiceListParams extends PaginationParams {
@@ -1070,4 +1102,162 @@ export interface SimulateStatusResponse {
   object: 'invoice'
   status: InvoiceStatus
   simulated: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Received Invoice
+// ---------------------------------------------------------------------------
+
+export type ReceivedInvoiceStatus =
+  | 'available'
+  | 'received'
+  | 'approved'
+  | 'refused'
+  | 'suspended'
+
+export interface ReceivedInvoice {
+  id: string
+  object: 'received_invoice'
+  livemode: boolean
+  paInvoiceId: string
+  sourcePA: string
+  sourceFormat: string
+  status: ReceivedInvoiceStatus
+  senderSiret: string
+  senderName: string
+  number: string
+  issuedAt: string
+  dueAt: string
+  totalHT: string
+  totalTVA: string
+  totalTTC: string
+  xmlPath: string
+  pdfPath: string | null
+  approvedAt: string | null
+  refusedAt: string | null
+  refusalReason: string | null
+  reconciled: boolean
+  reconciledPaymentId: string | null
+  lifecycle: LifecycleEntry[]
+  metadata: Record<string, unknown>
+  created: string
+  updated: string
+}
+
+export interface ReceivedInvoiceListParams extends PaginationParams {
+  status?: ReceivedInvoiceStatus
+}
+
+export interface ReceivedInvoiceRefuseParams {
+  reason: string
+}
+
+export interface ReceivedInvoiceRecordPaymentParams {
+  amount: number
+  method?: string
+  reference?: string
+  paidAt?: string
+}
+
+export interface ReceivedInvoiceActionResponse {
+  id: string
+  object: 'received_invoice'
+  status?: ReceivedInvoiceStatus
+  reconciled?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// MFA
+// ---------------------------------------------------------------------------
+
+export interface MfaSetupResponse {
+  object: 'mfa_setup'
+  secret: string
+  uri: string
+}
+
+export interface MfaVerifyParams {
+  code: string
+}
+
+export interface MfaVerifyResponse {
+  object: 'mfa_verification'
+  enabled: boolean
+}
+
+export interface MfaDisableParams {
+  code: string
+}
+
+export interface MfaDisableResponse {
+  object: 'mfa'
+  deleted: boolean
+}
+
+export interface MfaBackupCodesResponse {
+  object: 'mfa_backup_codes'
+  codes: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Reporting
+// ---------------------------------------------------------------------------
+
+export interface VatReportParams {
+  period_start: string
+  period_end: string
+}
+
+export interface VatReportBreakdown {
+  rate: string
+  taxable_amount: number
+  vat_amount: number
+}
+
+export interface VatReport {
+  object: 'vat_report'
+  period: { start: string; end: string }
+  vat_breakdown: VatReportBreakdown[]
+  total_ht: number
+  total_vat: number
+  total_ttc: number
+  invoice_count: number
+}
+
+export interface RevenueReportParams {
+  period_start: string
+  period_end: string
+  group_by?: 'month' | 'quarter'
+}
+
+export interface RevenueReportBreakdownItem {
+  period: string
+  revenue: {
+    invoiced: number
+    credit_notes: number
+    net: number
+  }
+  payments: {
+    received: number
+    outstanding: number
+  }
+  invoice_count: number
+  credit_note_count: number
+}
+
+export interface RevenueReport {
+  object: 'revenue_report'
+  period: { start: string; end: string }
+  revenue: {
+    invoiced: number
+    credit_notes: number
+    net: number
+  }
+  payments: {
+    received: number
+    outstanding: number
+  }
+  invoice_count: number
+  credit_note_count: number
+  breakdown?: RevenueReportBreakdownItem[]
 }

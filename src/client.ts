@@ -84,7 +84,7 @@ export class HttpClient {
           signal: controller.signal,
         }
 
-        if (body !== undefined && method !== 'GET' && method !== 'DELETE') {
+        if (body !== undefined && method !== 'GET') {
           fetchOptions.body = JSON.stringify(body)
         }
 
@@ -181,8 +181,8 @@ export class HttpClient {
     return this.request<T>('PATCH', path, body)
   }
 
-  async del<T>(path: string): Promise<T> {
-    return this.request<T>('DELETE', path)
+  async del<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('DELETE', path, body)
   }
 
   private buildError(
