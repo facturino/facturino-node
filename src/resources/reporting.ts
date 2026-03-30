@@ -6,7 +6,7 @@ import type {
   RevenueReport,
 } from '../types.js'
 
-/** Financial reporting — VAT and revenue reports (Essential+ plans). */
+/** Financial reporting — VAT and revenue reports (Essential, Pro, Cabinet plans). */
 export class Reporting {
   constructor(private readonly client: HttpClient) {}
 

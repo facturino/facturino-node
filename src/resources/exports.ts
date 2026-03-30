@@ -21,4 +21,9 @@ export class Exports {
   async getExportStatus(jobId: string): Promise<JobResponse> {
     return this.client.get<JobResponse>(`/v1/exports/${jobId}`)
   }
+
+  /** Bulk export all finalized invoices as ZIP (Factur-X PDF + CII XML). All plans. */
+  async exportInvoices(options?: RequestOptions): Promise<JobResponse> {
+    return this.client.post<JobResponse>('/v1/exports/invoices', undefined, options)
+  }
 }

@@ -55,4 +55,9 @@ export class Quotes {
   async getPdf(id: string): Promise<DocumentUrlResponse | JobResponse> {
     return this.client.get(`/v1/quotes/${id}/pdf`)
   }
+
+  /** Retrieve the electronic signature proof for an accepted quote. */
+  async getSignatureProof(id: string): Promise<DocumentUrlResponse> {
+    return this.client.get<DocumentUrlResponse>(`/v1/quotes/${id}/signature-proof`)
+  }
 }

@@ -33,11 +33,11 @@ export class Products {
     await this.client.del<void>(`/v1/products/${id}`)
   }
 
-  async importCsv(content: string, options?: RequestOptions): Promise<JobResponse> {
-    return this.client.post<JobResponse>('/v1/products/import', { content }, options)
+  async importCsv(csv: string, options?: RequestOptions): Promise<JobResponse> {
+    return this.client.post<JobResponse>('/v1/products/import', { csv }, options)
   }
 
   async exportCsv(): Promise<JobResponse> {
-    return this.client.post<JobResponse>('/v1/products/export')
+    return this.client.get<JobResponse>('/v1/products/export')
   }
 }

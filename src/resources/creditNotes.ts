@@ -47,4 +47,9 @@ export class CreditNotes {
   async getPdf(id: string): Promise<DocumentUrlResponse | JobResponse> {
     return this.client.get(`/v1/credit-notes/${id}/pdf`)
   }
+
+  /** Factur-X PDF/A-3 with embedded XML. URL or async job. */
+  async getFacturx(id: string): Promise<DocumentUrlResponse | JobResponse> {
+    return this.client.get(`/v1/credit-notes/${id}/facturx`)
+  }
 }

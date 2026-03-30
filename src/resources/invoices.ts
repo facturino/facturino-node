@@ -134,4 +134,14 @@ export class Invoices {
   async createPaymentToken(id: string, options?: RequestOptions): Promise<PaymentTokenResponse> {
     return this.client.post<PaymentTokenResponse>(`/v1/invoices/${id}/payment-token`, undefined, options)
   }
+
+  /** Create an incoming invoice received from a supplier. */
+  async createIncoming(params: Record<string, unknown>, options?: RequestOptions): Promise<Invoice> {
+    return this.client.post<Invoice>('/v1/invoices/incoming', params, options)
+  }
+
+  /** List incoming invoices. */
+  listIncoming(params?: InvoiceListParams): AutoPaginatingList<Invoice> {
+    return new AutoPaginatingList<Invoice>(this.client, '/v1/invoices/incoming', params)
+  }
 }

@@ -32,4 +32,9 @@ export class WebhookEndpoints {
   async del(id: string): Promise<void> {
     await this.client.del<void>(`/v1/webhook-endpoints/${id}`)
   }
+
+  /** Send a test event to verify the endpoint is reachable. */
+  async test(id: string): Promise<{ id: string; object: 'webhook_endpoint'; status: string }> {
+    return this.client.post(`/v1/webhook-endpoints/${id}/test`)
+  }
 }

@@ -32,11 +32,11 @@ export class RecurringInvoices {
     await this.client.del<void>(`/v1/recurring-invoices/${id}`)
   }
 
-  async activate(id: string): Promise<RecurringInvoice> {
-    return this.client.post<RecurringInvoice>(`/v1/recurring-invoices/${id}/activate`)
+  async resume(id: string): Promise<RecurringInvoice> {
+    return this.client.post<RecurringInvoice>(`/v1/recurring-invoices/${id}/resume`)
   }
 
-  async deactivate(id: string): Promise<RecurringInvoice> {
-    return this.client.post<RecurringInvoice>(`/v1/recurring-invoices/${id}/deactivate`)
+  async pause(id: string): Promise<RecurringInvoice> {
+    return this.client.post<RecurringInvoice>(`/v1/recurring-invoices/${id}/pause`)
   }
 }

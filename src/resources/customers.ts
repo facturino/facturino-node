@@ -40,11 +40,11 @@ export class Customers {
     return this.client.post<SireneLookupResponse>('/v1/customers/lookup', params)
   }
 
-  async importCsv(content: string, options?: RequestOptions): Promise<JobResponse> {
-    return this.client.post<JobResponse>('/v1/customers/import', { content }, options)
+  async importCsv(csv: string, options?: RequestOptions): Promise<JobResponse> {
+    return this.client.post<JobResponse>('/v1/customers/import', { csv }, options)
   }
 
   async exportCsv(): Promise<JobResponse> {
-    return this.client.post<JobResponse>('/v1/customers/export')
+    return this.client.get<JobResponse>('/v1/customers/export')
   }
 }
