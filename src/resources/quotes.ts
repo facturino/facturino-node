@@ -39,6 +39,26 @@ export class Quotes {
     return this.client.post<Quote>(`/v1/quotes/${id}/send`, undefined, options)
   }
 
+  /**
+   * Send the quote to its customer by email with the PDF attached. Returns
+   * `{status: 'sent'}` on success or `{status: 'pending'}` if the PDF is
+   * still being generated (caller should poll the returned `jobId`).
+   */
+  async email(
+    id: string,
+    params?: {
+      recipientEmail?: string
+      customMessage?: string
+      customSubject?: string
+    },
+    options?: RequestOptions,
+  ): Promise<
+    | { status: 'sent'; quoteId: string; recipient: string; sentAt: string }
+    | { status: 'pending'; quoteId: string; jobId: string; pollUrl: string; reason: string }
+  > {
+    return this.client.post(`/v1/quotes/${id}/email`, params, options)
+  }
+
   async accept(id: string, options?: RequestOptions): Promise<Quote> {
     return this.client.post<Quote>(`/v1/quotes/${id}/accept`, undefined, options)
   }

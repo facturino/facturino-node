@@ -18,10 +18,12 @@ import { Sandbox } from './resources/sandbox.js'
 import { ReceivedInvoices } from './resources/received-invoices.js'
 import { Mfa } from './resources/mfa.js'
 import { Reporting } from './resources/reporting.js'
+import { AccountResource } from './resources/account.js'
 import type { FacturinoConfig } from './types.js'
 
 /** Facturino API client for French e-invoicing — initialize with your API key to access all resources. */
 class Facturino {
+  readonly account: AccountResource
   readonly invoices: Invoices
   readonly customers: Customers
   readonly products: Products
@@ -45,6 +47,7 @@ class Facturino {
   constructor(apiKey: string, config?: FacturinoConfig) {
     const client = new HttpClient(apiKey, config)
 
+    this.account = new AccountResource(client)
     this.invoices = new Invoices(client)
     this.customers = new Customers(client)
     this.products = new Products(client)
@@ -191,15 +194,22 @@ export type {
   RevenueReportParams,
   RevenueReportBreakdownItem,
   RevenueReport,
+  AccountPlan,
+  Account,
 } from './types.js'
 
 export {
   FacturinoError,
   ApiError,
+  InvalidRequestError,
+  ValidationError,
   AuthenticationError,
-  RateLimitError,
+  PermissionError,
   NotFoundError,
+  ConflictError,
+  RateLimitError,
   PlanLimitError,
+  ApiInternalError,
   ConnectionError,
 } from './errors.js'
 

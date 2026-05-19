@@ -33,7 +33,31 @@ export class ApiError extends FacturinoError {
   }
 }
 
-/** 401 -- invalid, revoked, or missing API key. */
+/**
+ * 400 — request payload is malformed, a field is missing or invalid.
+ * Inspect `error.param` to identify the offending field.
+ */
+export class InvalidRequestError extends ApiError {
+  constructor(status: number, body: ApiErrorBody) {
+    super(status, body)
+    this.name = 'InvalidRequestError'
+  }
+}
+
+/**
+ * 422 — Zod schema validation rejected the payload. The offending field is
+ * surfaced in `error.param`. Distinct from {@link InvalidRequestError} so
+ * callers can differentiate "shape malformed" (400) from "value out of
+ * range / wrong type" (422) when re-displaying validation feedback.
+ */
+export class ValidationError extends ApiError {
+  constructor(status: number, body: ApiErrorBody) {
+    super(status, body)
+    this.name = 'ValidationError'
+  }
+}
+
+/** 401 — invalid, revoked, or missing API key. */
 export class AuthenticationError extends ApiError {
   constructor(status: number, body: ApiErrorBody) {
     super(status, body)
@@ -41,7 +65,39 @@ export class AuthenticationError extends ApiError {
   }
 }
 
-/** 429 -- rate limit exceeded. */
+/**
+ * 403 — the API key authenticated successfully but lacks the scope required
+ * for the requested operation. The required scope is exposed in
+ * `error.param`.
+ */
+export class PermissionError extends ApiError {
+  constructor(status: number, body: ApiErrorBody) {
+    super(status, body)
+    this.name = 'PermissionError'
+  }
+}
+
+/** 404 — resource not found, or not visible with this key's livemode. */
+export class NotFoundError extends ApiError {
+  constructor(status: number, body: ApiErrorBody) {
+    super(status, body)
+    this.name = 'NotFoundError'
+  }
+}
+
+/**
+ * 409 — the request conflicts with the current state of the resource
+ * (state-machine transition refused, finalized invoice cannot be edited,
+ * idempotency key reused with a different payload).
+ */
+export class ConflictError extends ApiError {
+  constructor(status: number, body: ApiErrorBody) {
+    super(status, body)
+    this.name = 'ConflictError'
+  }
+}
+
+/** 429 — rate limit exceeded. `retryAfter` is the recommended back-off in seconds. */
 export class RateLimitError extends ApiError {
   readonly retryAfter: number | null
 
@@ -52,15 +108,7 @@ export class RateLimitError extends ApiError {
   }
 }
 
-/** 404 -- resource not found. */
-export class NotFoundError extends ApiError {
-  constructor(status: number, body: ApiErrorBody) {
-    super(status, body)
-    this.name = 'NotFoundError'
-  }
-}
-
-/** 402 -- quota or plan limit exceeded. */
+/** 402 — quota or plan limit exceeded. Upgrade or revoke resources to recover. */
 export class PlanLimitError extends ApiError {
   constructor(status: number, body: ApiErrorBody) {
     super(status, body)
@@ -68,7 +116,18 @@ export class PlanLimitError extends ApiError {
   }
 }
 
-/** Network or timeout error. */
+/**
+ * 500/503 — Facturino is experiencing an internal error. The API is monitored
+ * automatically; safe to retry with exponential back-off.
+ */
+export class ApiInternalError extends ApiError {
+  constructor(status: number, body: ApiErrorBody) {
+    super(status, body)
+    this.name = 'ApiInternalError'
+  }
+}
+
+/** Network or timeout error. Not surfaced by the API itself. */
 export class ConnectionError extends FacturinoError {
   constructor(message: string) {
     super(message)

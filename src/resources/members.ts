@@ -34,4 +34,9 @@ export class Members {
   async revoke(companyId: string, id: string): Promise<void> {
     await this.client.del<void>(`${this.path(companyId)}/${id}`)
   }
+
+  /** Re-send the invitation email to a pending member (owner/admin only). */
+  async resendInvitation(companyId: string, id: string, options?: RequestOptions): Promise<Member> {
+    return this.client.post<Member>(`${this.path(companyId)}/${id}/resend-invitation`, undefined, options)
+  }
 }

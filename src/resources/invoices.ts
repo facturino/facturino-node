@@ -1,6 +1,5 @@
 import type { HttpClient } from '../client.js'
 import { AutoPaginatingList } from '../pagination.js'
-import { FacturinoError } from '../errors.js'
 import { Payments } from './payments.js'
 import type {
   Invoice,
@@ -59,12 +58,35 @@ export class Invoices {
   }
 
   /**
-   * Not supported under French e-invoicing law. Issue a credit note instead.
+   * Send a finalized invoice by email with PDF (and optionally XML) attached.
+   * Returns `{status: 'sent'}` on success or `{status: 'pending'}` if the PDF
+   * is still being generated (caller should poll the returned `jobId`).
    */
-  cancel(_id: string): never {
-    throw new FacturinoError(
-      'Cancelling invoices is not supported under French e-invoicing law. Issue a credit note instead.'
-    )
+  async email(
+    id: string,
+    params?: {
+      recipientEmail?: string
+      customMessage?: string
+      includeXml?: boolean
+      customSubject?: string
+    },
+    options?: RequestOptions,
+  ): Promise<
+    | { status: 'sent'; invoiceId: string; recipient: string; sentAt: string }
+    | { status: 'pending'; invoiceId: string; jobId: string; pollUrl: string; reason: string }
+  > {
+    return this.client.post(`/v1/invoices/${id}/email`, params, options)
+  }
+
+  /**
+   * Cancel a DRAFT invoice (status `draft` only). Finalized invoices are
+   * immutable under French law (CGI art. 289) — use `creditNotes.create()`
+   * to refund or correct a finalized invoice.
+   *
+   * @throws {FacturinoError} when called on a non-draft invoice (API returns 409)
+   */
+  async cancel(id: string, options?: RequestOptions): Promise<{ id: string; object: 'invoice'; status: 'cancelled' }> {
+    return this.client.post(`/v1/invoices/${id}/cancel`, undefined, options)
   }
 
   async remind(id: string, options?: RequestOptions): Promise<{ id: string; object: 'invoice'; reminder_sent: boolean }> {

@@ -1,11 +1,16 @@
 import type { FacturinoConfig, ApiErrorBody, RequestOptions } from './types.js'
 import {
   ApiError,
+  ApiInternalError,
   AuthenticationError,
-  RateLimitError,
-  NotFoundError,
-  PlanLimitError,
+  ConflictError,
   ConnectionError,
+  InvalidRequestError,
+  NotFoundError,
+  PermissionError,
+  PlanLimitError,
+  RateLimitError,
+  ValidationError,
 } from './errors.js'
 
 const DEFAULT_BASE_URL = 'https://facturino.com/api'
@@ -185,24 +190,57 @@ export class HttpClient {
     return this.request<T>('DELETE', path, body)
   }
 
+  /**
+   * Map an HTTP status + error body to the most specific {@link ApiError}
+   * subclass. Both the status and the `error.type` from the body are used:
+   * the status decides the primary class (401 → Authentication, 429 →
+   * RateLimit…) but for 4xx codes that share a status — notably 422 vs
+   * 400 — we look at `body.error.type` to discriminate further.
+   */
   private buildError(
     status: number,
     body: ApiErrorBody,
     headers: Headers,
   ): ApiError {
+    const type = body?.error?.type
+
     switch (status) {
+      case 400:
+        return new InvalidRequestError(status, body)
       case 401:
         return new AuthenticationError(status, body)
       case 402:
         return new PlanLimitError(status, body)
+      case 403:
+        return new PermissionError(status, body)
       case 404:
         return new NotFoundError(status, body)
+      case 409:
+        return new ConflictError(status, body)
+      case 422:
+        return new ValidationError(status, body)
       case 429: {
         const retryAfterHeader = headers.get('retry-after')
         const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null
         return new RateLimitError(status, body, Number.isNaN(retryAfter) ? null : retryAfter)
       }
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        return new ApiInternalError(status, body)
       default:
+        // Use the body `type` as a fallback for non-standard status codes so
+        // a 418 with `type: 'rate_limit_error'` still maps to the right
+        // class instead of falling through to the generic `ApiError`.
+        if (type === 'validation_error') return new ValidationError(status, body)
+        if (type === 'authentication_error') return new AuthenticationError(status, body)
+        if (type === 'permission_error') return new PermissionError(status, body)
+        if (type === 'conflict_error') return new ConflictError(status, body)
+        if (type === 'plan_limit_error') return new PlanLimitError(status, body)
+        if (type === 'rate_limit_error') return new RateLimitError(status, body, null)
+        if (type === 'not_found_error') return new NotFoundError(status, body)
+        if (type === 'api_error') return new ApiInternalError(status, body)
         return new ApiError(status, body)
     }
   }

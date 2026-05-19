@@ -44,6 +44,27 @@ export class CreditNotes {
     return this.client.post(`/v1/credit-notes/${id}/send`, undefined, options)
   }
 
+  /**
+   * Send the credit note to its customer by email with the PDF (and optional
+   * Factur-X XML) attached. Returns `{status: 'sent'}` on success or
+   * `{status: 'pending'}` if the PDF is still being generated.
+   */
+  async email(
+    id: string,
+    params?: {
+      recipientEmail?: string
+      customMessage?: string
+      includeXml?: boolean
+      customSubject?: string
+    },
+    options?: RequestOptions,
+  ): Promise<
+    | { status: 'sent'; creditNoteId: string; recipient: string; sentAt: string }
+    | { status: 'pending'; creditNoteId: string; jobId: string; pollUrl: string; reason: string }
+  > {
+    return this.client.post(`/v1/credit-notes/${id}/email`, params, options)
+  }
+
   async getPdf(id: string): Promise<DocumentUrlResponse | JobResponse> {
     return this.client.get(`/v1/credit-notes/${id}/pdf`)
   }

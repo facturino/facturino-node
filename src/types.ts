@@ -1261,3 +1261,52 @@ export interface RevenueReport {
   credit_note_count: number
   breakdown?: RevenueReportBreakdownItem[]
 }
+
+// ---------------------------------------------------------------------------
+// Account
+// ---------------------------------------------------------------------------
+
+/**
+ * Subscription plan attached to the authenticated account. `free` is the
+ * default; paid plans unlock e-invoicing, PA connections, FEC export, and
+ * more — see the rate-limits and pricing pages for the full matrix.
+ */
+export type AccountPlan =
+  | 'free'
+  | 'essential'
+  | 'pro'
+  | 'cabinet_50'
+  | 'cabinet_200'
+  | 'cabinet_500'
+
+/**
+ * Result of `GET /v1/account`. Returns the authenticated user, the active
+ * company, the current plan and the scopes attached to the API key in
+ * use. Equivalent to Stripe's "who am I" introspection endpoint — use
+ * it on integration startup to display the connected company and the
+ * environment (`fac_test_` vs `fac_live_`).
+ */
+export interface Account {
+  object: 'account'
+  userId: string
+  companyId: string
+  plan: AccountPlan
+  /** `true` when the key is a `fac_live_…`, `false` for sandbox. */
+  livemode: boolean
+  /** Echo of the prefix of the key used (`fac_test_` or `fac_live_`). */
+  apiKeyPrefix: string
+  /** Scopes attached to the key. Empty array on unrestricted keys. */
+  permissions: string[]
+  /** Snapshot of the active company. `null` when the user has none yet. */
+  company:
+    | {
+        id: string
+        name?: string
+        siret?: string
+        vatRegime?: string
+      }
+    | null
+  user: {
+    emailVerified: boolean
+  }
+}
