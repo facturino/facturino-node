@@ -7,31 +7,49 @@ import type {
 } from '../types.js'
 
 /**
- * Settings — company-level configuration that does NOT belong to a
- * single resource: accounting accounts (FEC mapping), automatic
- * reminder schedule, etc.
+ * Settings — per-company configuration that does NOT belong to a single
+ * resource: accounting accounts (FEC mapping) and the automatic
+ * reminder schedule.
  *
- * All settings live under the active company; switch keys to act on a
- * different company.
+ * Settings live under `/v1/companies/{companyId}/settings/...`; every
+ * method takes the target `companyId` as its first argument so a single
+ * API key can administer settings on each of the companies it is
+ * scoped to.
  */
 export class Settings {
   constructor(private readonly client: HttpClient) {}
 
   /** Accounting configuration (FEC accounts, journal codes, VAT regime). */
-  async retrieveAccounting(): Promise<AccountingSettings> {
-    return this.client.get<AccountingSettings>('/v1/settings/accounting')
+  async retrieveAccounting(companyId: string): Promise<AccountingSettings> {
+    return this.client.get<AccountingSettings>(
+      `/v1/companies/${companyId}/settings/accounting`,
+    )
   }
 
-  async updateAccounting(params: AccountingSettingsUpdate): Promise<AccountingSettings> {
-    return this.client.patch<AccountingSettings>('/v1/settings/accounting', params)
+  async updateAccounting(
+    companyId: string,
+    params: AccountingSettingsUpdate,
+  ): Promise<AccountingSettings> {
+    return this.client.patch<AccountingSettings>(
+      `/v1/companies/${companyId}/settings/accounting`,
+      params,
+    )
   }
 
   /** Automatic dunning reminder schedule (J+7 / J+15 / J+30 by default). */
-  async retrieveReminders(): Promise<ReminderSettings> {
-    return this.client.get<ReminderSettings>('/v1/settings/reminders')
+  async retrieveReminders(companyId: string): Promise<ReminderSettings> {
+    return this.client.get<ReminderSettings>(
+      `/v1/companies/${companyId}/settings/reminders`,
+    )
   }
 
-  async updateReminders(params: ReminderSettingsUpdate): Promise<ReminderSettings> {
-    return this.client.patch<ReminderSettings>('/v1/settings/reminders', params)
+  async updateReminders(
+    companyId: string,
+    params: ReminderSettingsUpdate,
+  ): Promise<ReminderSettings> {
+    return this.client.patch<ReminderSettings>(
+      `/v1/companies/${companyId}/settings/reminders`,
+      params,
+    )
   }
 }

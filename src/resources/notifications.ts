@@ -19,11 +19,13 @@ function buildQuery(params: Record<string, unknown>): string {
 /**
  * Notifications — in-app notification feed and per-event preferences.
  *
- * Notifications are scoped to the authenticated user (not the company);
- * the in-app feed mirrors what the dashboard "bell" icon displays.
+ * The in-app feed is scoped to the authenticated user (not the company)
+ * and mirrors what the dashboard "bell" icon displays.
+ *
  * Per-event preferences (email / push / in-app per notification type)
- * are stored at the user level and override the channel matrix
- * defaults from the API.
+ * are stored at the user level under `/v1/notification-preferences`
+ * and override the channel-matrix defaults documented on the API
+ * reference.
  */
 export class Notifications {
   constructor(private readonly client: HttpClient) {}
@@ -50,6 +52,11 @@ export class Notifications {
     return this.client.patch('/v1/notifications/mark-all-read', {})
   }
 
+  /** Retrieve the per-event notification preferences for the authenticated user. */
+  async retrievePreferences(): Promise<NotificationPreferences> {
+    return this.client.get<NotificationPreferences>('/v1/notification-preferences')
+  }
+
   /**
    * Update per-event notification preferences. The body merges with the
    * existing preferences map; pass `{ preferences: { invoice_paid: {
@@ -59,6 +66,9 @@ export class Notifications {
   async updatePreferences(
     params: NotificationPreferencesUpdate,
   ): Promise<NotificationPreferences> {
-    return this.client.patch<NotificationPreferences>('/v1/notifications', params)
+    return this.client.patch<NotificationPreferences>(
+      '/v1/notification-preferences',
+      params,
+    )
   }
 }

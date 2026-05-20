@@ -157,6 +157,23 @@ export class Invoices {
     return this.client.post<PaymentTokenResponse>(`/v1/invoices/${id}/payment-token`, undefined, options)
   }
 
+  /**
+   * Generate a signed client-portal link for a finalized invoice. The
+   * URL points to a public, branded portal where the customer can view
+   * the invoice, download the PDF and trigger the payment flow. The
+   * token embedded in the URL grants read-only access to a single
+   * invoice and expires after the configured lifetime.
+   *
+   * Rejects with `invalid_status_transition` if the invoice is still
+   * in draft.
+   */
+  async createPortalLink(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<{ url: string; token: string; expires_at: string }> {
+    return this.client.post(`/v1/invoices/${id}/portal-link`, undefined, options)
+  }
+
   /** Create an incoming invoice received from a supplier. */
   async createIncoming(params: Record<string, unknown>, options?: RequestOptions): Promise<Invoice> {
     return this.client.post<Invoice>('/v1/invoices/incoming', params, options)

@@ -99,13 +99,21 @@ describe('Notifications', () => {
     expect(init.body).toContain('"read":true')
   })
 
-  it('PATCH /v1/notifications updates preferences', async () => {
+  it('GET /v1/notification-preferences retrieves preferences', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, { preferences: {} }))
+    await f.notifications.retrievePreferences()
+    const [url, init] = lastCall()
+    expect(url).toContain('/v1/notification-preferences')
+    expect(init.method).toBe('GET')
+  })
+
+  it('PATCH /v1/notification-preferences updates preferences', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(200, { preferences: {} }))
     await f.notifications.updatePreferences({
       preferences: { invoice_paid: { email: false, inApp: true, push: true } },
     })
     const [url, init] = lastCall()
-    expect(url).toMatch(/\/v1\/notifications$/)
+    expect(url).toMatch(/\/v1\/notification-preferences$/)
     expect(init.method).toBe('PATCH')
   })
 })
@@ -117,19 +125,19 @@ describe('Settings', () => {
     f = new Facturino('fac_test_x')
   })
 
-  it('GET /v1/settings/accounting', async () => {
+  it('GET /v1/companies/:id/settings/accounting takes companyId', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(200, { object: 'accounting_settings' }))
-    await f.settings.retrieveAccounting()
+    await f.settings.retrieveAccounting('comp_xyz')
     const [url, init] = lastCall()
-    expect(url).toContain('/v1/settings/accounting')
+    expect(url).toContain('/v1/companies/comp_xyz/settings/accounting')
     expect(init.method).toBe('GET')
   })
 
-  it('PATCH /v1/settings/reminders', async () => {
+  it('PATCH /v1/companies/:id/settings/reminders updates the schedule', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(200, { object: 'reminder_settings', enabled: true }))
-    await f.settings.updateReminders({ enabled: true, intervals: [7, 15, 30] })
+    await f.settings.updateReminders('comp_xyz', { enabled: true, intervals: [7, 15, 30] })
     const [url, init] = lastCall()
-    expect(url).toContain('/v1/settings/reminders')
+    expect(url).toContain('/v1/companies/comp_xyz/settings/reminders')
     expect(init.method).toBe('PATCH')
   })
 })
