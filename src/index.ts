@@ -19,11 +19,20 @@ import { ReceivedInvoices } from './resources/received-invoices.js'
 import { Mfa } from './resources/mfa.js'
 import { Reporting } from './resources/reporting.js'
 import { AccountResource } from './resources/account.js'
+import { Billing } from './resources/billing.js'
+import { Notifications } from './resources/notifications.js'
+import { Settings } from './resources/settings.js'
+import { Usage } from './resources/usage.js'
+import { Validate } from './resources/validate.js'
+import { Reference } from './resources/reference.js'
+import { Cabinets } from './resources/cabinets.js'
 import type { FacturinoConfig } from './types.js'
 
 /** Facturino API client for French e-invoicing — initialize with your API key to access all resources. */
 class Facturino {
   readonly account: AccountResource
+  readonly billing: Billing
+  readonly cabinets: Cabinets
   readonly invoices: Invoices
   readonly customers: Customers
   readonly products: Products
@@ -38,7 +47,12 @@ class Facturino {
   readonly exports: Exports
   readonly ereporting: EReportingResource
   readonly jobs: Jobs
+  readonly notifications: Notifications
+  readonly reference: Reference
   readonly sandbox: Sandbox
+  readonly settings: Settings
+  readonly usage: Usage
+  readonly validate: Validate
   readonly webhooks: Webhooks
   readonly receivedInvoices: ReceivedInvoices
   readonly mfa: Mfa
@@ -48,6 +62,8 @@ class Facturino {
     const client = new HttpClient(apiKey, config)
 
     this.account = new AccountResource(client)
+    this.billing = new Billing(client)
+    this.cabinets = new Cabinets(client)
     this.invoices = new Invoices(client)
     this.customers = new Customers(client)
     this.products = new Products(client)
@@ -62,7 +78,12 @@ class Facturino {
     this.exports = new Exports(client)
     this.ereporting = new EReportingResource(client)
     this.jobs = new Jobs(client)
+    this.notifications = new Notifications(client)
+    this.reference = new Reference(client)
     this.sandbox = new Sandbox(client)
+    this.settings = new Settings(client)
+    this.usage = new Usage(client)
+    this.validate = new Validate(client)
     this.webhooks = new Webhooks()
     this.receivedInvoices = new ReceivedInvoices(client)
     this.mfa = new Mfa(client)
@@ -196,6 +217,40 @@ export type {
   RevenueReport,
   AccountPlan,
   Account,
+  // Billing
+  BillingCycle,
+  BillingSubscription,
+  BillingSubscriptionUpdateParams,
+  BillingCheckoutParams,
+  BillingPortalParams,
+  PlatformInvoice,
+  // Notifications
+  NotificationChannel,
+  Notification,
+  NotificationPreferences,
+  NotificationPreferencesUpdate,
+  // Settings
+  AccountingSettings,
+  AccountingSettingsUpdate,
+  ReminderSettings,
+  ReminderSettingsUpdate,
+  // Usage
+  UsageMeter,
+  UsageSummary,
+  // Validate
+  ValidateParams,
+  ValidateResponse,
+  // Reference
+  LegalForm,
+  NafCode,
+  // Cabinets
+  Cabinet,
+  CabinetCreateParams,
+  CabinetBrandingUpdate,
+  CabinetCompanySummary,
+  CabinetDashboard,
+  CabinetActivity,
+  CabinetBillingSplit,
 } from './types.js'
 
 export {

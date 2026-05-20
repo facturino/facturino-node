@@ -1310,3 +1310,271 @@ export interface Account {
     emailVerified: boolean
   }
 }
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+export type BillingCycle = 'monthly' | 'annual'
+
+export interface BillingSubscription {
+  object: 'subscription'
+  id: string
+  plan: AccountPlan
+  cycle: BillingCycle
+  status: 'active' | 'past_due' | 'paused' | 'canceled' | 'incomplete' | 'trialing'
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  cancelAtPeriodEnd: boolean
+}
+
+export interface BillingSubscriptionUpdateParams {
+  plan?: AccountPlan
+  cycle?: BillingCycle
+  cancelAtPeriodEnd?: boolean
+}
+
+export interface BillingCheckoutParams {
+  plan: AccountPlan
+  cycle?: BillingCycle
+  successUrl: string
+  cancelUrl: string
+}
+
+export interface BillingPortalParams {
+  returnUrl?: string
+}
+
+/** Facturino → user platform invoice (INTEK CENTER SAS, monthly billing). */
+export interface PlatformInvoice {
+  object: 'platform_invoice'
+  id: string
+  number: string
+  status: 'paid' | 'open' | 'void'
+  amount: string
+  currency: Currency
+  periodStart: string
+  periodEnd: string
+  invoicePdfPath: string | null
+  created: string
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export type NotificationChannel = 'in_app' | 'email' | 'push'
+
+export interface Notification {
+  object: 'notification'
+  id: string
+  userId: string
+  companyId: string | null
+  /** Backend event type (e.g. `invoice_paid`, `quote_accepted`, `security_login`). */
+  type: string
+  title: string
+  body: string
+  channel: NotificationChannel
+  link: string | null
+  metadata: Record<string, unknown> | null
+  read: boolean
+  created: string
+  expiresAt: string
+}
+
+/**
+ * Per-event channel preferences. UI keys group some backend types — see
+ * the API docs (`/docs/notifications`) for the canonical mapping (e.g.
+ * `security_mfa` covers `security_mfa_enabled`).
+ */
+export type NotificationPreferences = {
+  preferences: Record<string, { email?: boolean; inApp?: boolean; push?: boolean }>
+}
+
+export interface NotificationPreferencesUpdate {
+  preferences: Record<string, { email?: boolean; inApp?: boolean; push?: boolean }>
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+/** Accounting configuration — FEC export mapping (PCG accounts, journal codes). */
+export interface AccountingSettings {
+  object: 'accounting_settings'
+  fiscalYearStart: string
+  journalCode: string
+  bankJournalCode: string
+  serviceAccount: string
+  goodsAccount: string
+  bankAccount: string
+  clientAccountPrefix: string
+  vatAccounts: {
+    rate20: string
+    rate10: string
+    rate55: string
+    rate21: string
+  }
+}
+
+export type AccountingSettingsUpdate = Partial<Omit<AccountingSettings, 'object'>>
+
+/** Automatic payment-reminder schedule (J+7 / J+15 / J+30 by default). */
+export interface ReminderSettings {
+  object: 'reminder_settings'
+  enabled: boolean
+  /** Days past due at which each reminder level is sent. */
+  intervals: number[]
+  /** Optional custom template overrides per level. */
+  templates?: Partial<Record<'level1' | 'level2' | 'level3', { subject?: string; body?: string }>>
+}
+
+export type ReminderSettingsUpdate = Partial<Omit<ReminderSettings, 'object'>>
+
+// ---------------------------------------------------------------------------
+// Usage
+// ---------------------------------------------------------------------------
+
+export interface UsageMeter {
+  used: number
+  limit: number
+  /** ISO timestamp of the next reset (start of next billing month). */
+  resetsAt: string
+}
+
+export interface UsageSummary {
+  object: 'usage'
+  plan: AccountPlan
+  period: { start: string; end: string }
+  invoices: UsageMeter
+  apiRequests: UsageMeter
+  storageBytes: UsageMeter
+  paSubmissions: UsageMeter
+  companies: UsageMeter
+  members: UsageMeter
+}
+
+// ---------------------------------------------------------------------------
+// Validate
+// ---------------------------------------------------------------------------
+
+/**
+ * Discriminated union of the supported validation kinds. The response
+ * shape is always `{ valid: boolean, errors: string[] }` plus a few
+ * kind-specific enrichments (e.g. SIRENE-resolved company name on
+ * `siret`).
+ */
+export type ValidateParams =
+  | { kind: 'siret'; value: string }
+  | { kind: 'siren'; value: string }
+  | { kind: 'vat'; value: string }
+  | { kind: 'iban'; value: string }
+  | { kind: 'bic'; value: string }
+  | { kind: 'invoice'; invoice: Record<string, unknown> }
+
+export interface ValidateResponse {
+  object: 'validation_result'
+  kind: string
+  valid: boolean
+  errors: string[]
+  /** Kind-specific enrichments (e.g. SIRENE name, VIES company name). */
+  enrichment?: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
+// Reference (INSEE legal forms + NAF codes)
+// ---------------------------------------------------------------------------
+
+export interface LegalForm {
+  code: string
+  sigle: string
+  label: string
+}
+
+export interface NafCode {
+  code: string
+  label: string
+}
+
+// ---------------------------------------------------------------------------
+// Cabinets (cabinet_50/200/500 plans only)
+// ---------------------------------------------------------------------------
+
+export interface Cabinet {
+  object: 'cabinet'
+  id: string
+  name: string
+  siret: string
+  plan: 'cabinet_50' | 'cabinet_200' | 'cabinet_500'
+  /** Custom white-label branding for the dashboard delivered to clients. */
+  branding?: {
+    logoUrl?: string
+    primaryColor?: string
+    customDomain?: string
+  }
+  companyCount: number
+  memberCount: number
+  created: string
+}
+
+export interface CabinetCreateParams {
+  name: string
+  siret: string
+  plan: Cabinet['plan']
+}
+
+export type CabinetBrandingUpdate = NonNullable<Cabinet['branding']>
+
+export interface CabinetCompanySummary {
+  id: string
+  name: string
+  siret: string
+  /** Most recent invoice activity timestamp; null when no activity yet. */
+  lastInvoiceAt: string | null
+  /** Pending PA submissions (deposited but not yet acknowledged). */
+  pendingPa: number
+  /** Overdue (unpaid past `due`) invoices. */
+  overdueInvoices: number
+}
+
+export interface CabinetDashboard {
+  object: 'cabinet_dashboard'
+  cabinetId: string
+  period: { start: string; end: string }
+  totals: {
+    revenueHT: string
+    revenueTTC: string
+    invoicesCount: number
+    overdueAmount: string
+    overdueCount: number
+  }
+  perCompany: Array<{
+    companyId: string
+    name: string
+    revenueHT: string
+    invoicesCount: number
+  }>
+}
+
+export interface CabinetActivity {
+  id: string
+  type: string
+  companyId: string
+  companyName: string
+  description: string
+  created: string
+}
+
+export interface CabinetBillingSplit {
+  object: 'cabinet_billing_split'
+  cabinetId: string
+  period: { start: string; end: string }
+  totalAmount: string
+  currency: Currency
+  perCompany: Array<{
+    companyId: string
+    name: string
+    /** Pro-rata share of the cabinet subscription for this company. */
+    amount: string
+  }>
+}
