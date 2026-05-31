@@ -1,6 +1,7 @@
 import type { HttpClient } from '../client.js'
 import type {
   BillingCheckoutParams,
+  BillingPauseParams,
   BillingPortalParams,
   BillingSubscription,
   BillingSubscriptionUpdateParams,
@@ -38,19 +39,39 @@ export class Billing {
     return this.client.get<BillingSubscription>('/v1/billing/subscription')
   }
 
-  /** Change the plan or cycle (pro ↔ essential, monthly ↔ annual). */
+  /**
+   * Change the plan or billing cadence (pro ↔ essential, monthly ↔ annual).
+   *
+   * The ergonomic `cycle` field is mapped to the wire-level `annual` boolean
+   * before sending; only `planId` and `annual` are accepted by the API.
+   * Cancelling at period end is done through the Stripe Customer Portal
+   * ({@link portal}), not this endpoint.
+   */
   async updateSubscription(
     params: BillingSubscriptionUpdateParams,
   ): Promise<BillingSubscription> {
-    return this.client.patch<BillingSubscription>('/v1/billing/subscription', params)
+    const { cycle, annual, planId } = params
+    const body: { planId?: BillingSubscriptionUpdateParams['planId']; annual?: boolean } = {}
+    if (planId !== undefined) body.planId = planId
+    if (cycle !== undefined) body.annual = cycle === 'annual'
+    else if (annual !== undefined) body.annual = annual
+    return this.client.patch<BillingSubscription>('/v1/billing/subscription', body)
   }
 
-  /** Create a Stripe Checkout session for the first paid subscription. */
+  /**
+   * Create a Stripe Checkout session for the first paid subscription.
+   * Accepts exactly `planId`, `successUrl` and `cancelUrl`.
+   */
   async checkout(
     params: BillingCheckoutParams,
     options?: RequestOptions,
   ): Promise<{ url: string; sessionId: string }> {
-    return this.client.post('/v1/billing/checkout', params, options)
+    const body: BillingCheckoutParams = {
+      planId: params.planId,
+      successUrl: params.successUrl,
+      cancelUrl: params.cancelUrl,
+    }
+    return this.client.post('/v1/billing/checkout', body, options)
   }
 
   /** Create a Stripe Customer Portal session for self-service changes. */
@@ -61,9 +82,12 @@ export class Billing {
     return this.client.post('/v1/billing/portal', params, options)
   }
 
-  /** Pause the active subscription (Pro-only). */
-  async pause(options?: RequestOptions): Promise<BillingSubscription> {
-    return this.client.post<BillingSubscription>('/v1/billing/pause', undefined, options)
+  /** Pause the active subscription for 1–3 months (Pro-only). */
+  async pause(
+    params: BillingPauseParams,
+    options?: RequestOptions,
+  ): Promise<BillingSubscription> {
+    return this.client.post<BillingSubscription>('/v1/billing/pause', params, options)
   }
 
   /** Resume a paused subscription. */

@@ -26,6 +26,7 @@ import { Usage } from './resources/usage.js'
 import { Validate } from './resources/validate.js'
 import { Reference } from './resources/reference.js'
 import { Cabinets } from './resources/cabinets.js'
+import { Archives } from './resources/archives.js'
 import type { FacturinoConfig } from './types.js'
 
 /** Facturino API client for French e-invoicing — initialize with your API key to access all resources. */
@@ -57,6 +58,7 @@ class Facturino {
   readonly receivedInvoices: ReceivedInvoices
   readonly mfa: Mfa
   readonly reporting: Reporting
+  readonly archives: Archives
 
   constructor(apiKey: string, config?: FacturinoConfig) {
     const client = new HttpClient(apiKey, config)
@@ -88,6 +90,7 @@ class Facturino {
     this.receivedInvoices = new ReceivedInvoices(client)
     this.mfa = new Mfa(client)
     this.reporting = new Reporting(client)
+    this.archives = new Archives(client)
   }
 }
 
@@ -121,6 +124,8 @@ export type {
   InvoiceArchive,
   InvoiceFiles,
   Invoice,
+  InvoiceBuyerParam,
+  InvoiceCreateDates,
   InvoiceCreateParams,
   InvoiceLineItemParam,
   InvoiceUpdateParams,
@@ -222,6 +227,7 @@ export type {
   BillingSubscription,
   BillingSubscriptionUpdateParams,
   BillingCheckoutParams,
+  BillingPauseParams,
   BillingPortalParams,
   PlatformInvoice,
   // Notifications

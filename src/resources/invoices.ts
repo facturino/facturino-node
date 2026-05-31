@@ -79,13 +79,14 @@ export class Invoices {
   }
 
   /**
-   * Cancel a DRAFT invoice (status `draft` only). Finalized invoices are
-   * immutable under French law (CGI art. 289) — use `creditNotes.create()`
-   * to refund or correct a finalized invoice.
+   * Cancel a DRAFT invoice (status `draft` only). This soft-deletes the
+   * draft and returns `{ id, object: 'invoice', deleted: true }`. Finalized
+   * invoices are immutable under French law (CGI art. 289) — use
+   * `creditNotes.create()` to refund or correct a finalized invoice.
    *
-   * @throws {FacturinoError} when called on a non-draft invoice (API returns 409)
+   * @throws {FacturinoError} when called on a non-draft invoice (API returns 400)
    */
-  async cancel(id: string, options?: RequestOptions): Promise<{ id: string; object: 'invoice'; status: 'cancelled' }> {
+  async cancel(id: string, options?: RequestOptions): Promise<{ id: string; object: 'invoice'; deleted: true }> {
     return this.client.post(`/v1/invoices/${id}/cancel`, undefined, options)
   }
 

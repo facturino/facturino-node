@@ -125,11 +125,11 @@ export interface LifecycleEntry {
 export type Currency = 'eur'
 
 export type Unit =
-  | 'piece'
-  | 'heure'
-  | 'jour'
-  | 'mois'
-  | 'forfait'
+  | 'unit'
+  | 'hour'
+  | 'day'
+  | 'month'
+  | 'flat_rate'
   | 'kg'
   | 'm'
   | 'm2'
@@ -258,19 +258,28 @@ export interface Invoice {
   updated: string
 }
 
+export interface InvoiceBuyerParam {
+  companyName: string
+  siret?: string
+  vatNumber?: string
+  address: Address
+  deliveryAddress?: Address
+}
+
+export interface InvoiceCreateDates {
+  issued: string
+  due: string
+  serviceStart?: string
+  serviceEnd?: string
+}
+
 export interface InvoiceCreateParams {
   customerId: string
   type?: InvoiceType
   lines: InvoiceLineItemParam[]
-  buyer?: {
-    companyName: string
-    siret?: string
-    vatNumber?: string
-    address: Address
-    deliveryAddress?: Address
-  }
-  dates?: Partial<InvoiceDates>
-  payment?: Partial<InvoicePaymentTerms>
+  buyer: InvoiceBuyerParam
+  dates: InvoiceCreateDates
+  payment: InvoicePaymentTerms
   einvoicing?: {
     format?: 'facturx' | 'ubl' | 'cii'
     profile?: 'EN16931' | 'BASIC' | 'EXTENDED'
@@ -292,15 +301,9 @@ export interface InvoiceLineItemParam {
 }
 
 export interface InvoiceUpdateParams {
-  buyer?: {
-    companyName: string
-    siret?: string
-    vatNumber?: string
-    address: Address
-    deliveryAddress?: Address
-  }
+  buyer?: InvoiceBuyerParam
   lines?: InvoiceLineItemParam[]
-  dates?: Partial<InvoiceDates>
+  dates?: Partial<InvoiceCreateDates>
   payment?: Partial<InvoicePaymentTerms>
   einvoicing?: {
     format?: 'facturx' | 'ubl' | 'cii'
@@ -1329,20 +1332,31 @@ export interface BillingSubscription {
 }
 
 export interface BillingSubscriptionUpdateParams {
-  plan?: AccountPlan
+  /** Target plan. Only `essential` and `pro` can be set through this endpoint. */
+  planId?: Extract<AccountPlan, 'essential' | 'pro'>
+  /**
+   * Billing cadence. Mapped to the wire `annual` boolean before sending.
+   * Provide either `cycle` (ergonomic) or `annual` directly.
+   */
   cycle?: BillingCycle
-  cancelAtPeriodEnd?: boolean
+  /** Wire-level flag — `true` for annual billing, `false` (default) for monthly. */
+  annual?: boolean
 }
 
 export interface BillingCheckoutParams {
-  plan: AccountPlan
-  cycle?: BillingCycle
+  /** Plan to subscribe to. */
+  planId: Exclude<AccountPlan, 'free'>
   successUrl: string
   cancelUrl: string
 }
 
 export interface BillingPortalParams {
   returnUrl?: string
+}
+
+export interface BillingPauseParams {
+  /** Number of billing months to pause for (1–3). */
+  months: 1 | 2 | 3
 }
 
 /** Facturino → user platform invoice (INTEK CENTER SAS, monthly billing). */

@@ -49,20 +49,39 @@ describe('Billing', () => {
 
   it('POST /v1/billing/checkout with body', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(200, { url: 'https://stripe.com/checkout/x', sessionId: 'cs_x' }))
-    const res = await f.billing.checkout({ plan: 'pro', successUrl: 'a', cancelUrl: 'b' })
+    const res = await f.billing.checkout({ planId: 'pro', successUrl: 'a', cancelUrl: 'b' })
     const [url, init] = lastCall()
     expect(url).toContain('/v1/billing/checkout')
     expect(init.method).toBe('POST')
-    expect(init.body).toContain('"plan":"pro"')
+    expect(init.body).toContain('"planId":"pro"')
     expect(res.url).toContain('checkout')
   })
 
-  it('POST /v1/billing/pause', async () => {
+  it('PATCH /v1/billing/subscription maps cycle to annual and never leaks plan/cycle', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(200, { object: 'subscription', plan: 'pro', cycle: 'annual', cancelAtPeriodEnd: false }),
+    )
+    const sub = await f.billing.updateSubscription({ planId: 'pro', cycle: 'annual' })
+    const [url, init] = lastCall()
+    expect(url).toContain('/v1/billing/subscription')
+    expect(init.method).toBe('PATCH')
+    expect(init.body).toContain('"planId":"pro"')
+    expect(init.body).toContain('"annual":true')
+    expect(init.body).not.toContain('"cycle"')
+    expect(init.body).not.toContain('"plan":')
+    expect(init.body).not.toContain('cancelAtPeriodEnd')
+    // Response fields stay readable
+    expect(sub.plan).toBe('pro')
+    expect(sub.cancelAtPeriodEnd).toBe(false)
+  })
+
+  it('POST /v1/billing/pause with months', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(200, { status: 'paused' }))
-    await f.billing.pause()
+    await f.billing.pause({ months: 2 })
     const [url, init] = lastCall()
     expect(url).toContain('/v1/billing/pause')
     expect(init.method).toBe('POST')
+    expect(init.body).toContain('"months":2')
   })
 
   it('GET /v1/billing/invoices with query params', async () => {

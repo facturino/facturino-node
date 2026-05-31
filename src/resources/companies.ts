@@ -101,7 +101,13 @@ export class Companies {
 
   // --- Stripe Connect ---
 
-  async connectStripe(params: { returnUrl: string; refreshUrl: string }): Promise<{ url: string }> {
+  /**
+   * Start a Stripe Connect onboarding session for the active company.
+   * Returns the hosted onboarding URL the user must be redirected to.
+   * `return_url` is where Stripe sends the user back once onboarding is
+   * complete or abandoned.
+   */
+  async createStripeConnect(params: { return_url: string }): Promise<{ url: string }> {
     return this.client.post<{ url: string }>('/v1/companies/stripe-connect', params)
   }
 
@@ -109,8 +115,23 @@ export class Companies {
     return this.client.get<{ url: string }>('/v1/companies/stripe-dashboard')
   }
 
-  async disconnectStripe(): Promise<{ deleted: boolean }> {
+  /** Disconnect the Stripe Connect account from the active company. */
+  async deleteStripeConnect(): Promise<{ deleted: boolean }> {
     return this.client.del<{ deleted: boolean }>('/v1/companies/stripe-connect')
+  }
+
+  /**
+   * @deprecated Use {@link createStripeConnect}. Kept for backward
+   * compatibility; the `refreshUrl` argument is ignored and `returnUrl`
+   * is forwarded as the contract `return_url` field.
+   */
+  async connectStripe(params: { returnUrl: string; refreshUrl?: string }): Promise<{ url: string }> {
+    return this.createStripeConnect({ return_url: params.returnUrl })
+  }
+
+  /** @deprecated Use {@link deleteStripeConnect}. */
+  async disconnectStripe(): Promise<{ deleted: boolean }> {
+    return this.deleteStripeConnect()
   }
 
   // --- PA Connection (BYOPA) ---
