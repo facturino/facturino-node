@@ -79,6 +79,29 @@ describe('Invoices resource', () => {
       const [url] = mockFetch.mock.calls[0]
       expect(url).toContain('/v1/invoices/inv_123')
     })
+
+    it('should pass comma-separated expand and return expanded objects', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, {
+          id: 'inv_123',
+          object: 'invoice',
+          status: 'finalized',
+          expanded: {
+            credit_notes: [{ id: 'crn_1', object: 'credit_note' }],
+            net_balance: '80.00',
+          },
+        }),
+      )
+
+      const result = await facturino.invoices.get('inv_123', {
+        expand: ['customer', 'credit_notes'],
+      })
+
+      const [url] = mockFetch.mock.calls[0]
+      expect(url).toContain('expand=customer,credit_notes')
+      expect(result.expanded?.net_balance).toBe('80.00')
+      expect(result.expanded?.credit_notes).toHaveLength(1)
+    })
   })
 
   describe('update', () => {

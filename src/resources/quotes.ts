@@ -72,6 +72,11 @@ export class Quotes {
     return this.client.post<Invoice>(`/v1/quotes/${id}/convert`, undefined, options)
   }
 
+  /** Clone as new draft quote. */
+  async clone(id: string, options?: RequestOptions): Promise<Quote> {
+    return this.client.post<Quote>(`/v1/quotes/${id}/clone`, undefined, options)
+  }
+
   async getPdf(id: string): Promise<DocumentUrlResponse | JobResponse> {
     return this.client.get(`/v1/quotes/${id}/pdf`)
   }

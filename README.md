@@ -64,6 +64,7 @@ const page = await facturino.invoices.list({ status: 'draft' })
 // Invoices
 facturino.invoices.create(params)
 facturino.invoices.get('inv_xxx')
+facturino.invoices.get('inv_xxx', { expand: ['customer', 'credit_notes'] })
 facturino.invoices.update('inv_xxx', params)
 facturino.invoices.del('inv_xxx')
 facturino.invoices.finalize('inv_xxx')
@@ -71,6 +72,7 @@ facturino.invoices.send('inv_xxx')
 facturino.invoices.getPdf('inv_xxx')
 facturino.invoices.getFacturx('inv_xxx')
 facturino.invoices.getXml('inv_xxx', 'cii')
+facturino.invoices.list({ convertedFrom: 'quo_xxx' })  // invoices issued from a quote
 
 // Payments (sub-resource)
 facturino.invoices.payments.create('inv_xxx', { amount: 10000, method: 'transfer', paidAt: '...' })
@@ -79,12 +81,17 @@ facturino.invoices.payments.list('inv_xxx')
 // Customers
 facturino.customers.create(params)
 facturino.customers.lookup({ siret: '12345678901234' })
+// contacts[].role: 'billing' | 'technical' | 'main' (billing receives invoices)
+
+// Products
+facturino.products.list({ q: 'consult', category: 'services', active: true })
 
 // Quotes
 facturino.quotes.create(params)
 facturino.quotes.send('quo_xxx')
 facturino.quotes.accept('quo_xxx')
 facturino.quotes.convert('quo_xxx')  // -> draft invoice
+facturino.quotes.clone('quo_xxx')    // -> duplicated draft quote
 
 // Credit Notes
 facturino.creditNotes.create(params)

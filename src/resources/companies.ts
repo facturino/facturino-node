@@ -7,6 +7,7 @@ import type {
   CgvResponse,
   InvoiceSettings,
   PaginatedResponse,
+  PATestResult,
   RequestOptions,
 } from '../types.js'
 
@@ -152,8 +153,15 @@ export class Companies {
     return this.client.del<{ deleted: boolean }>(`/v1/companies/${companyId}/pa-connection`)
   }
 
-  /** Test the PA connection (health check + credential validation). */
-  async testPAConnection(companyId: string): Promise<{ healthy: boolean; latencyMs: number; details: string }> {
-    return this.client.post(`/v1/companies/${companyId}/pa-connection/test`, {})
+  /**
+   * Test the PA connection: verifies network reachability and credential
+   * validity via a directory lookup of the company SIRET. Returns a
+   * {@link PATestResult}. A `healthy: false` result carries an `errorCode`:
+   * `pa_credentials_invalid` (fix credentials), `pa_unreachable` (PA/network
+   * outage), `pa_not_supported` (the PA has no directory lookup — a capability
+   * gap, not a failure of your setup), or `pa_error`.
+   */
+  async testPAConnection(companyId: string): Promise<PATestResult> {
+    return this.client.post<PATestResult>(`/v1/companies/${companyId}/pa-connection/test`, {})
   }
 }

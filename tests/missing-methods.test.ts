@@ -152,6 +152,71 @@ describe('Companies — backfilled methods', () => {
   })
 })
 
+describe('Products — list filters', () => {
+  let f: Facturino
+  beforeEach(() => {
+    mockFetch.mockReset()
+    f = new Facturino('fac_test_x')
+  })
+
+  it('forwards q, category and active filters on GET /v1/products', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(200, { object: 'list', url: '/v1/products', data: [], has_more: false, next_cursor: null }),
+    )
+    await f.products.list({ q: 'cons', category: 'services', active: true })
+    const [url] = lastCall()
+    expect(url).toContain('q=cons')
+    expect(url).toContain('category=services')
+    expect(url).toContain('active=true')
+  })
+})
+
+describe('Invoices — convertedFrom filter', () => {
+  let f: Facturino
+  beforeEach(() => {
+    mockFetch.mockReset()
+    f = new Facturino('fac_test_x')
+  })
+
+  it('forwards convertedFrom on GET /v1/invoices', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(200, { object: 'list', url: '/v1/invoices', data: [], has_more: false, next_cursor: null }),
+    )
+    await f.invoices.list({ convertedFrom: 'quo_123' })
+    const [url] = lastCall()
+    expect(url).toContain('convertedFrom=quo_123')
+  })
+})
+
+describe('Quotes — clone', () => {
+  let f: Facturino
+  beforeEach(() => {
+    mockFetch.mockReset()
+    f = new Facturino('fac_test_x')
+  })
+
+  it('POST /v1/quotes/:id/clone returns a duplicated draft quote', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(201, { id: 'quo_clone', object: 'quote', status: 'draft' }),
+    )
+    const res = await f.quotes.clone('quo_src')
+    const [url, init] = lastCall()
+    expect(url).toContain('/v1/quotes/quo_src/clone')
+    expect(init.method).toBe('POST')
+    expect(res.id).toBe('quo_clone')
+    expect(res.status).toBe('draft')
+  })
+
+  it('forwards an idempotency key on clone', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(201, { id: 'quo_clone', object: 'quote', status: 'draft' }),
+    )
+    await f.quotes.clone('quo_src', { idempotencyKey: 'idem_clone_1' })
+    const [, init] = lastCall()
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe('idem_clone_1')
+  })
+})
+
 describe('Invoices — backfilled portal link', () => {
   it('POST /v1/invoices/:id/portal-link returns a signed client-portal URL', async () => {
     mockFetch.mockReset()

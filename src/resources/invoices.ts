@@ -6,6 +6,7 @@ import type {
   InvoiceCreateParams,
   InvoiceUpdateParams,
   InvoiceListParams,
+  InvoiceRetrieveParams,
   InvoiceStatusResponse,
   InvoiceVerifyResponse,
   DocumentUrlResponse,
@@ -34,8 +35,16 @@ export class Invoices {
     return new AutoPaginatingList<Invoice>(this.client, '/v1/invoices', params)
   }
 
-  async get(id: string): Promise<Invoice> {
-    return this.client.get<Invoice>(`/v1/invoices/${id}`)
+  /**
+   * Retrieve an invoice. Pass `expand` to inline related objects in the
+   * response under `invoice.expanded` — `customer`, `items.product`, and
+   * `credit_notes`. With `credit_notes`, the response also carries
+   * `expanded.net_balance` (TTC minus credited amounts, as a Decimal string).
+   */
+  async get(id: string, params?: InvoiceRetrieveParams): Promise<Invoice> {
+    const expand = params?.expand
+    const query = expand && expand.length ? `?expand=${expand.map(encodeURIComponent).join(',')}` : ''
+    return this.client.get<Invoice>(`/v1/invoices/${id}${query}`)
   }
 
   async update(id: string, params: InvoiceUpdateParams): Promise<Invoice> {

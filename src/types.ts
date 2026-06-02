@@ -63,13 +63,20 @@ export interface Address {
   country: string
 }
 
+/** A contact attached to a customer. */
 export interface Contact {
   firstName?: string
   lastName?: string
   email?: string
   phone?: string
-  role?: string
+  /**
+   * Role of the contact for this customer. The `billing` contact receives
+   * invoices by email by default.
+   */
+  role?: ContactRole
 }
+
+export type ContactRole = 'billing' | 'technical' | 'main'
 
 export interface LineItem {
   id: string
@@ -253,9 +260,29 @@ export interface Invoice {
   legalMentions: string | null
   lifecycle: LifecycleEntry[]
   metadata: Record<string, unknown>
+  /** Populated only when requested via the `expand` retrieve parameter. */
+  expanded?: InvoiceExpanded
   livemode: boolean
   created: string
   updated: string
+}
+
+/** Fields that can be inlined via the `expand` retrieve parameter. */
+export type InvoiceExpandField = 'customer' | 'items.product' | 'credit_notes'
+
+/** Expanded objects inlined on an invoice when requested via `expand`. */
+export interface InvoiceExpanded {
+  customer?: Customer
+  /** Credit notes issued against this invoice (with `expand=credit_notes`). */
+  credit_notes?: CreditNote[]
+  /** TTC total minus credited amounts, as a Decimal string (with `expand=credit_notes`). */
+  net_balance?: string
+}
+
+/** Query parameters for {@link Invoices.get}. */
+export interface InvoiceRetrieveParams {
+  /** Objects to inline in the response (e.g. `['customer', 'credit_notes']`). */
+  expand?: InvoiceExpandField[]
 }
 
 export interface InvoiceBuyerParam {
@@ -316,6 +343,8 @@ export interface InvoiceUpdateParams {
 
 export interface InvoiceListParams extends PaginationParams {
   status?: InvoiceStatus
+  /** Filter to invoices issued from the given quote (id starting with `quo_`). */
+  convertedFrom?: string
 }
 
 export interface InvoiceStatusResponse {
@@ -547,6 +576,12 @@ export interface ProductUpdateParams {
 
 export interface ProductListParams extends PaginationParams {
   status?: 'active' | 'inactive'
+  /** Prefix search on the product name. */
+  q?: string
+  /** Filter by product category. */
+  category?: string
+  /** Filter by active state. */
+  active?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -885,6 +920,17 @@ export interface InvoiceSettings {
   yearlyReset: boolean
 }
 
+/** Credit-note numbering configuration for a company. */
+export interface CreditNoteSettings {
+  /**
+   * Numbering strategy for credit notes. `separate` (default) gives credit
+   * notes their own number series; `unified` shares the invoice number series.
+   */
+  numberingMode?: CreditNoteNumberingMode
+}
+
+export type CreditNoteNumberingMode = 'separate' | 'unified'
+
 export interface Company {
   id: string
   name: string
@@ -907,6 +953,7 @@ export interface Company {
   defaultPaymentTerms: number
   defaultPaymentMethod: PaymentMethod
   invoiceSettings: InvoiceSettings
+  creditNoteSettings?: CreditNoteSettings
   active: boolean
   onboardingCompleted: boolean
   created: string
@@ -925,6 +972,7 @@ export interface CompanyUpdateParams {
   defaultPaymentTerms?: number
   defaultPaymentMethod?: PaymentMethod
   invoiceSettings?: Partial<InvoiceSettings>
+  creditNoteSettings?: CreditNoteSettings
 }
 
 export interface CgvResponse {
@@ -1591,4 +1639,24 @@ export interface CabinetBillingSplit {
     /** Pro-rata share of the cabinet subscription for this company. */
     amount: string
   }>
+}
+
+/**
+ * Result of `companies.testPAConnection`. `healthy` reflects whether the PA is
+ * reachable with valid credentials. `errorCode` is present only when
+ * `healthy` is false:
+ * - `pa_credentials_invalid` — credentials rejected (fix them);
+ * - `pa_unreachable` — network/PA outage (retry later);
+ * - `pa_not_supported` — the PA does not expose a directory lookup (a
+ *   capability gap, not necessarily a misconfiguration);
+ * - `pa_error` — other PA-side error.
+ */
+export interface PATestResult {
+  object: 'pa_connection_test'
+  healthy: boolean
+  latencyMs: number
+  details: string
+  provider: string
+  testedAt: string
+  errorCode?: 'pa_credentials_invalid' | 'pa_unreachable' | 'pa_not_supported' | 'pa_error'
 }
