@@ -73,4 +73,10 @@ export class CreditNotes {
   async getFacturx(id: string): Promise<DocumentUrlResponse | JobResponse> {
     return this.client.get(`/v1/credit-notes/${id}/facturx`)
   }
+
+  /** Raw CII or UBL XML. */
+  async getXml(id: string, format?: 'cii' | 'ubl'): Promise<string> {
+    const query = format ? `?format=${format}` : ''
+    return this.client.get<string>(`/v1/credit-notes/${id}/xml${query}`)
+  }
 }

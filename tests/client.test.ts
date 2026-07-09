@@ -66,7 +66,7 @@ describe('HttpClient', () => {
       expect(url).toBe('https://facturino.com/api/v1/invoices/inv_123')
       expect(opts.headers['Authorization']).toBe('Bearer fac_test_abc123')
       expect(opts.headers['Content-Type']).toBe('application/json')
-      expect(opts.headers['Facturino-Version']).toBe('2026-02-01')
+      expect(opts.headers['Facturino-Version']).toBe('2026-03-01')
       expect(opts.headers['User-Agent']).toMatch(/^facturino-node\//)
     })
 

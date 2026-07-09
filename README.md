@@ -19,16 +19,29 @@ import Facturino from '@facturino/node'
 const facturino = new Facturino('fac_test_xxx')
 
 const invoice = await facturino.invoices.create({
-  customer: 'cus_xxx',
-  items: [{
+  customerId: 'cus_xxx',
+  buyer: {
+    companyName: 'Acme SAS',
+    siret: '55208131766522',
+    address: { line1: '10 rue de la Paix', postalCode: '75002', city: 'Paris', country: 'FR' },
+  },
+  lines: [{
     description: 'Consulting',
-    quantity: 1,
-    unit_price: 10000,  // 100.00 EUR
-    vat_rate: 2000,     // 20.00%
+    quantity: '1',      // decimal string
+    unit: 'flat_rate',
+    unitPrice: 10000,   // 100.00 EUR (centimes)
+    vatRate: 2000,      // 20.00% (centièmes de pourcent)
+    vatCode: 'S',
   }],
+  dates: { issued: '2026-07-01', due: '2026-07-31' },
+  payment: { terms: 'Paiement à 30 jours', termsDays: 30, method: 'transfer', latePaymentRate: '10.00', collectionFee: '40.00' },
 })
 
 const finalized = await facturino.invoices.finalize(invoice.id)
+
+// One-shot: pass `autoFinalize: true` (and optionally
+// `autoSend: { email: true, pa: true }`) to `invoices.create(...)` to
+// finalize — and deliver by email and/or to the PA — in a single call.
 ```
 
 ## Configuration
@@ -37,7 +50,7 @@ const finalized = await facturino.invoices.finalize(invoice.id)
 const facturino = new Facturino('fac_test_xxx', {
   maxRetries: 3,      // retries on 429/5xx
   timeout: 30000,     // ms
-  apiVersion: '2026-02-01',
+  apiVersion: '2026-03-01',
 })
 ```
 
@@ -99,7 +112,8 @@ facturino.creditNotes.finalize('crn_xxx')
 
 // Recurring Invoices
 facturino.recurringInvoices.create(params)
-facturino.recurringInvoices.activate('rin_xxx')
+facturino.recurringInvoices.pause('rec_xxx')
+facturino.recurringInvoices.resume('rec_xxx')
 
 // E-Reporting
 facturino.ereporting.createDeclaration(params)
@@ -115,7 +129,7 @@ facturino.jobs.poll('job_xxx')  // wait for async completion
 facturino.sandbox.resetData()
 facturino.sandbox.simulateStatus('inv_xxx', { status: 'approved' })
 
-// Also: companies, members, apiKeys, events, webhookEndpoints, products
+// Also: companies, events, webhookEndpoints, products
 ```
 
 ## Webhooks

@@ -16,7 +16,7 @@ import {
 const DEFAULT_BASE_URL = 'https://facturino.com/api'
 const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_TIMEOUT = 30_000
-const DEFAULT_API_VERSION = '2026-02-01'
+const DEFAULT_API_VERSION = '2026-03-01'
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503])
 const INITIAL_RETRY_DELAY_MS = 500

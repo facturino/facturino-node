@@ -14,7 +14,7 @@ export class Usage {
   /**
    * Return the current usage snapshot. The response includes the plan
    * limits and the consumption so far for each metered dimension; no
-   * historical data — the dashboard uses `GET /v1/exports/revenue`
+   * historical data — the dashboard uses `GET /v1/reporting/revenue`
    * for trend lines.
    */
   async retrieve(): Promise<UsageSummary> {

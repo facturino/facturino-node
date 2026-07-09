@@ -9,7 +9,7 @@ export interface FacturinoConfig {
   maxRetries?: number
   /** Timeout in ms (default: 30000). */
   timeout?: number
-  /** API version header (default: "2026-02-01"). */
+  /** API version header (default: "2026-03-01"). */
   apiVersion?: string
 }
 
@@ -78,36 +78,39 @@ export interface Contact {
 
 export type ContactRole = 'billing' | 'technical' | 'main'
 
+// Monetary amounts are integer centimes and VAT/discount rates are centièmes de
+// pourcent (e.g. 15000 = 150,00 EUR, 2000 = 20,00 %) — same unit as on input.
+// `quantity` is a decimal-string count, not an amount.
 export interface LineItem {
   id: string
   description: string
   quantity: string
   unit: Unit
-  unitPrice: string
-  discountPercent: string
-  lineAmount: string
-  vatRate: string
+  unitPrice: number
+  discountPercent: number
+  lineAmount: number
+  vatRate: number
   vatCode: VatCode
-  vatAmount: string
-  lineTotal: string
+  vatAmount: number
+  lineTotal: number
   product: string | null
 }
 
 export interface VatBreakdown {
-  rate: string
+  rate: number
   code: VatCode
-  base: string
-  amount: string
+  base: number
+  amount: number
 }
 
 export interface Totals {
-  totalHT: string
-  discountAmount: string
+  totalHT: number
+  discountAmount: number
   vatBreakdown: VatBreakdown[]
-  totalVAT: string
-  totalTTC: string
-  amountDue: string
-  amountPaid: string
+  totalVAT: number
+  totalTTC: number
+  amountDue: number
+  amountPaid: number
 }
 
 export interface CustomerRef {
@@ -275,8 +278,8 @@ export interface InvoiceExpanded {
   customer?: Customer
   /** Credit notes issued against this invoice (with `expand=credit_notes`). */
   credit_notes?: CreditNote[]
-  /** TTC total minus credited amounts, as a Decimal string (with `expand=credit_notes`). */
-  net_balance?: string
+  /** TTC total minus credited amounts, in integer cents (with `expand=credit_notes`). */
+  net_balance?: number
 }
 
 /** Query parameters for {@link Invoices.get}. */
@@ -307,13 +310,16 @@ export interface InvoiceCreateParams {
   buyer: InvoiceBuyerParam
   dates: InvoiceCreateDates
   payment: InvoicePaymentTerms
-  einvoicing?: {
-    format?: 'facturx' | 'ubl' | 'cii'
-    profile?: 'EN16931' | 'BASIC' | 'EXTENDED'
-  }
   notes?: string
   purchaseOrderNumber?: string
   metadata?: Record<string, unknown>
+  /** Finalize the invoice in the same call (assigns its number). */
+  autoFinalize?: boolean
+  /**
+   * Finalize then send in the same call: by email to the customer
+   * (`email`) and/or by deposit to the connected PA (`pa`).
+   */
+  autoSend?: { email?: boolean; pa?: boolean }
 }
 
 export interface InvoiceLineItemParam {
@@ -332,10 +338,6 @@ export interface InvoiceUpdateParams {
   lines?: InvoiceLineItemParam[]
   dates?: Partial<InvoiceCreateDates>
   payment?: Partial<InvoicePaymentTerms>
-  einvoicing?: {
-    format?: 'facturx' | 'ubl' | 'cii'
-    profile?: 'EN16931' | 'BASIC' | 'EXTENDED'
-  }
   notes?: string
   purchaseOrderNumber?: string
   metadata?: Record<string, unknown>
@@ -345,6 +347,20 @@ export interface InvoiceListParams extends PaginationParams {
   status?: InvoiceStatus
   /** Filter to invoices issued from the given quote (id starting with `quo_`). */
   convertedFrom?: string
+}
+
+/**
+ * Record a supplier invoice received outside the platform (manual entry), so
+ * it appears in the inbound register alongside e-invoices delivered via the PA.
+ */
+export interface IncomingInvoiceCreateParams {
+  senderName: string
+  senderSiret?: string
+  /** Total amount incl. VAT, in integer cents. */
+  amount: number
+  /** The supplier's invoice number / reference. */
+  reference?: string
+  notes?: string
 }
 
 export interface InvoiceStatusResponse {
@@ -378,8 +394,7 @@ export interface JobResponse {
   object: 'job'
   type: string
   status: string
-  invoice_id?: string
-  company_id?: string
+  invoiceId?: string
 }
 
 export interface PaymentLinkResponse {
@@ -407,7 +422,7 @@ export interface PaymentTokenResponse {
 export interface Payment {
   id: string
   object: 'payment'
-  amount: string
+  amount: number // integer centimes
   method: PaymentMethod | 'other'
   reference: string | null
   paidAt: string
@@ -433,8 +448,8 @@ export interface Customer {
   siret?: string
   siren?: string
   vatNumber?: string
-  legalForm?: string
-  nafCode?: string
+  legalForm?: LegalForm | null
+  naf?: NafCode | null
   address: Address
   deliveryAddress?: Address
   type: 'company' | 'individual'
@@ -442,7 +457,7 @@ export interface Customer {
   paymentTerms?: number
   tags?: string[]
   notes?: string
-  balance: string
+  balance: number
   currency: Currency
   siretVerified: boolean
   vatVerified: boolean
@@ -464,8 +479,8 @@ export interface CustomerCreateParams {
   siret?: string
   siren?: string
   vatNumber?: string
-  legalForm?: string
-  nafCode?: string
+  legalForm?: LegalFormInput
+  naf?: NafCodeInput
   deliveryAddress?: Address
   contacts?: Contact[]
   paymentTerms?: number
@@ -474,7 +489,6 @@ export interface CustomerCreateParams {
   paIdentifier?: string
   preferredFormat?: 'facturx' | 'ubl' | 'cii'
   receivingPaId?: string
-  recipientServiceCode?: string
   metadata?: Record<string, unknown>
 }
 
@@ -485,7 +499,8 @@ export interface CustomerUpdateParams {
   email?: string
   siret?: string
   vatNumber?: string
-  legalForm?: string
+  legalForm?: LegalFormInput
+  naf?: NafCodeInput
   deliveryAddress?: Address
   contacts?: Contact[]
   paymentTerms?: number
@@ -493,7 +508,7 @@ export interface CustomerUpdateParams {
   notes?: string
   paIdentifier?: string
   preferredFormat?: 'facturx' | 'ubl' | 'cii'
-  recipientServiceCode?: string
+  receivingPaId?: string
 }
 
 export interface CustomerListParams extends PaginationParams {
@@ -505,19 +520,29 @@ export interface CustomerLookupParams {
   query?: string
 }
 
+/** Company details resolved from the INSEE Sirene registry (not a stored customer). */
+export interface SireneCompany {
+  name: string
+  siret: string
+  siren: string
+  vatNumber: string
+  legalForm: LegalForm | null
+  naf: NafCode | null
+  address: Address
+  active: boolean
+}
+
+/**
+ * Result of a customer lookup. A SIRET lookup returns object `sirene_lookup`
+ * with `found`/`data`; a name query returns object `sirene_search` with
+ * `results`/`total` instead.
+ */
 export interface SireneLookupResponse {
-  object: 'sirene_lookup'
-  found: boolean
-  data: {
-    name: string
-    siret: string
-    siren: string
-    vatNumber: string
-    legalForm: string
-    nafCode: string
-    address: Address
-    active: boolean
-  } | null
+  object: 'sirene_lookup' | 'sirene_search'
+  found?: boolean
+  data?: SireneCompany | null
+  results?: SireneCompany[]
+  total?: number
   warning?: string
 }
 
@@ -532,8 +557,8 @@ export interface Product {
   description?: string
   reference?: string
   category?: string
-  unitPrice: string
-  vatRate: string
+  unitPrice: number // integer centimes
+  vatRate: number // centièmes de pourcent
   vatCode: VatCode
   unit: Unit
   tags: string[]
@@ -545,8 +570,8 @@ export interface Product {
 }
 
 export interface PriceHistoryEntry {
-  price: string
-  vatRate: string
+  price: number // integer centimes
+  vatRate: number // centièmes de pourcent
   changedAt: string
   changedBy: string
 }
@@ -899,7 +924,8 @@ export interface RecurringInvoiceUpdateParams {
 }
 
 export interface RecurringInvoiceListParams extends PaginationParams {
-  active?: boolean
+  /** Filter by schedule state. Omit to return both active and paused schedules. */
+  status?: 'active' | 'inactive'
 }
 
 // ---------------------------------------------------------------------------
@@ -937,8 +963,8 @@ export interface Company {
   siret: string
   siren: string
   vatNumber: string
-  legalForm: string
-  apeCode?: string
+  legalForm: LegalForm | null
+  naf?: NafCode | null
   rcs?: string
   capitalSocial?: string
   tvaIntracom: string
@@ -983,76 +1009,6 @@ export interface CgvResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Member
-// ---------------------------------------------------------------------------
-
-export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer'
-export type MemberStatus = 'pending' | 'active' | 'revoked'
-
-export interface Member {
-  id: string
-  email: string
-  displayName: string
-  role: MemberRole
-  status: MemberStatus
-  invitedBy: string
-  invitedAt: string
-  acceptedAt: string | null
-  revokedAt: string | null
-  created: string
-  updated: string
-}
-
-export interface MemberInviteParams {
-  email: string
-  role: MemberRole
-  displayName?: string
-}
-
-export interface MemberUpdateParams {
-  role: MemberRole
-}
-
-// ---------------------------------------------------------------------------
-// API Key
-// ---------------------------------------------------------------------------
-
-export type ApiKeyPermission =
-  | 'invoices:read'
-  | 'invoices:write'
-  | 'customers:read'
-  | 'customers:write'
-  | 'quotes:read'
-  | 'quotes:write'
-  | 'credit_notes:read'
-  | 'credit_notes:write'
-  | 'products:read'
-  | 'products:write'
-  | 'webhooks:read'
-  | 'webhooks:write'
-  | 'payments:read'
-  | 'payments:write'
-
-export interface ApiKey {
-  id: string
-  name: string
-  prefix: string
-  livemode: boolean
-  permissions: ApiKeyPermission[]
-  revoked: boolean
-  revokedAt: string | null
-  lastUsedAt: string | null
-  created: string
-  /** Full key, only returned on create/roll. */
-  key?: string
-}
-
-export interface ApiKeyCreateParams {
-  name: string
-  permissions?: ApiKeyPermission[]
-}
-
-// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -1063,11 +1019,20 @@ export interface FecExportParams {
   accountant_email?: string
 }
 
+export interface InvoiceExportParams {
+  /** Lower bound on the invoice issue date (inclusive), YYYY-MM-DD. */
+  period_start?: string
+  /** Upper bound on the invoice issue date (inclusive), YYYY-MM-DD. */
+  period_end?: string
+  /** Restrict to these lifecycle statuses. Defaults to every non-draft status. */
+  statuses?: string[]
+}
+
 // ---------------------------------------------------------------------------
 // E-reporting
 // ---------------------------------------------------------------------------
 
-export type EReportingType = 'b2c' | 'international' | 'intra_eu'
+export type EReportingType = 'b2c' | 'international' | 'intra_eu' | 'payment'
 export type EReportingStatus = 'draft' | 'submitted' | 'accepted' | 'rejected'
 
 /** Input line: amounts in centimes, vatRate in centipercent */
@@ -1078,12 +1043,12 @@ export interface EReportingLine {
   vatAmount: number
 }
 
-/** Response line: amounts and rates as Decimal strings */
+/** Response line: amounts in integer centimes, rates in centièmes de pourcent */
 export interface EReportingLineResponse {
   category: string
-  amount: string
-  vatRate: string
-  vatAmount: string
+  amount: number
+  vatRate: number
+  vatAmount: number
 }
 
 export interface EReporting {
@@ -1092,9 +1057,9 @@ export interface EReporting {
   status: EReportingStatus
   type: EReportingType
   period: string
-  totalHT: string
-  totalTVA: string
-  totalTTC: string
+  totalHT: number
+  totalTVA: number
+  totalTTC: number
   lines: EReportingLineResponse[]
   submittedAt?: string
   paResponseId?: string
@@ -1129,8 +1094,10 @@ export interface Job {
   progress: number
   result: string | null
   error: string | null
-  download_url?: string
-  expires_in?: number
+  /** Signed download URL for a completed PDF/Factur-X/export job. */
+  url?: string
+  /** ISO 8601 expiry of the signed `url`. */
+  expiresAt?: string
   created: string
 }
 
@@ -1174,14 +1141,17 @@ export interface ReceivedInvoice {
   sourcePA: string
   sourceFormat: string
   status: ReceivedInvoiceStatus
+  /** 14-digit SIRET (empty when the seller exposes only a SIREN). */
   senderSiret: string
+  /** 9-digit SIREN — the CIUS-FR French seller identifier (BT-30). */
+  senderSiren: string
   senderName: string
   number: string
   issuedAt: string
   dueAt: string
-  totalHT: string
-  totalTVA: string
-  totalTTC: string
+  totalHT: number // integer centimes
+  totalTVA: number
+  totalTTC: number
   xmlPath: string
   pdfPath: string | null
   approvedAt: string | null
@@ -1218,39 +1188,6 @@ export interface ReceivedInvoiceActionResponse {
 }
 
 // ---------------------------------------------------------------------------
-// MFA
-// ---------------------------------------------------------------------------
-
-export interface MfaSetupResponse {
-  object: 'mfa_setup'
-  secret: string
-  uri: string
-}
-
-export interface MfaVerifyParams {
-  code: string
-}
-
-export interface MfaVerifyResponse {
-  object: 'mfa_verification'
-  enabled: boolean
-}
-
-export interface MfaDisableParams {
-  code: string
-}
-
-export interface MfaDisableResponse {
-  object: 'mfa'
-  deleted: boolean
-}
-
-export interface MfaBackupCodesResponse {
-  object: 'mfa_backup_codes'
-  codes: string[]
-}
-
-// ---------------------------------------------------------------------------
 // Reporting
 // ---------------------------------------------------------------------------
 
@@ -1261,18 +1198,21 @@ export interface VatReportParams {
 
 export interface VatReportBreakdown {
   rate: string
-  taxable_amount: number
-  vat_amount: number
+  /** Taxable base for this rate, in integer cents. */
+  taxableAmount: number
+  /** VAT due for this rate, in integer cents. */
+  vatAmount: number
 }
 
 export interface VatReport {
   object: 'vat_report'
   period: { start: string; end: string }
-  vat_breakdown: VatReportBreakdown[]
-  total_ht: number
-  total_vat: number
-  total_ttc: number
-  invoice_count: number
+  vatBreakdown: VatReportBreakdown[]
+  /** Totals for the period, in integer cents. */
+  totalHT: number
+  totalVAT: number
+  totalTTC: number
+  invoiceCount: number
 }
 
 export interface RevenueReportParams {
@@ -1379,34 +1319,6 @@ export interface BillingSubscription {
   cancelAtPeriodEnd: boolean
 }
 
-export interface BillingSubscriptionUpdateParams {
-  /** Target plan. Only `essential` and `pro` can be set through this endpoint. */
-  planId?: Extract<AccountPlan, 'essential' | 'pro'>
-  /**
-   * Billing cadence. Mapped to the wire `annual` boolean before sending.
-   * Provide either `cycle` (ergonomic) or `annual` directly.
-   */
-  cycle?: BillingCycle
-  /** Wire-level flag — `true` for annual billing, `false` (default) for monthly. */
-  annual?: boolean
-}
-
-export interface BillingCheckoutParams {
-  /** Plan to subscribe to. */
-  planId: Exclude<AccountPlan, 'free'>
-  successUrl: string
-  cancelUrl: string
-}
-
-export interface BillingPortalParams {
-  returnUrl?: string
-}
-
-export interface BillingPauseParams {
-  /** Number of billing months to pause for (1–3). */
-  months: 1 | 2 | 3
-}
-
 /** Facturino → user platform invoice (INTEK CENTER SAS, monthly billing). */
 export interface PlatformInvoice {
   object: 'platform_invoice'
@@ -1422,98 +1334,40 @@ export interface PlatformInvoice {
 }
 
 // ---------------------------------------------------------------------------
-// Notifications
-// ---------------------------------------------------------------------------
-
-export type NotificationChannel = 'in_app' | 'email' | 'push'
-
-export interface Notification {
-  object: 'notification'
-  id: string
-  userId: string
-  companyId: string | null
-  /** Backend event type (e.g. `invoice_paid`, `quote_accepted`, `security_login`). */
-  type: string
-  title: string
-  body: string
-  channel: NotificationChannel
-  link: string | null
-  metadata: Record<string, unknown> | null
-  read: boolean
-  created: string
-  expiresAt: string
-}
-
-/**
- * Per-event channel preferences. UI keys group some backend types — see
- * the API docs (`/docs/notifications`) for the canonical mapping (e.g.
- * `security_mfa` covers `security_mfa_enabled`).
- */
-export type NotificationPreferences = {
-  preferences: Record<string, { email?: boolean; inApp?: boolean; push?: boolean }>
-}
-
-export interface NotificationPreferencesUpdate {
-  preferences: Record<string, { email?: boolean; inApp?: boolean; push?: boolean }>
-}
-
-// ---------------------------------------------------------------------------
-// Settings
-// ---------------------------------------------------------------------------
-
-/** Accounting configuration — FEC export mapping (PCG accounts, journal codes). */
-export interface AccountingSettings {
-  object: 'accounting_settings'
-  fiscalYearStart: string
-  journalCode: string
-  bankJournalCode: string
-  serviceAccount: string
-  goodsAccount: string
-  bankAccount: string
-  clientAccountPrefix: string
-  vatAccounts: {
-    rate20: string
-    rate10: string
-    rate55: string
-    rate21: string
-  }
-}
-
-export type AccountingSettingsUpdate = Partial<Omit<AccountingSettings, 'object'>>
-
-/** Automatic payment-reminder schedule (J+7 / J+15 / J+30 by default). */
-export interface ReminderSettings {
-  object: 'reminder_settings'
-  enabled: boolean
-  /** Days past due at which each reminder level is sent. */
-  intervals: number[]
-  /** Optional custom template overrides per level. */
-  templates?: Partial<Record<'level1' | 'level2' | 'level3', { subject?: string; body?: string }>>
-}
-
-export type ReminderSettingsUpdate = Partial<Omit<ReminderSettings, 'object'>>
-
-// ---------------------------------------------------------------------------
 // Usage
 // ---------------------------------------------------------------------------
 
+/**
+ * A single metered dimension: how much has been consumed in the current period
+ * and the plan limit. `limit` is `null` when the dimension is unlimited on the
+ * current plan.
+ */
 export interface UsageMeter {
   used: number
-  limit: number
-  /** ISO timestamp of the next reset (start of next billing month). */
-  resetsAt: string
+  limit: number | null
 }
 
+/**
+ * Current-period usage snapshot for the authenticated account, returned by
+ * `GET /v1/usage`. Drive in-app quota gauges and upgrade prompts from it,
+ * before a limit triggers a `402 quota_exceeded` response.
+ */
 export interface UsageSummary {
   object: 'usage'
   plan: AccountPlan
-  period: { start: string; end: string }
-  invoices: UsageMeter
-  apiRequests: UsageMeter
-  storageBytes: UsageMeter
-  paSubmissions: UsageMeter
-  companies: UsageMeter
-  members: UsageMeter
+  /** ISO 8601 start of the current monthly metering period. */
+  periodStart: string
+  /** Per-dimension counters. Monthly dimensions reset one month after `periodStart`. */
+  counters: {
+    apiRequestsMonth: UsageMeter
+    invoicesMonth: UsageMeter
+    quotesMonth: UsageMeter
+    customers: UsageMeter
+    products: UsageMeter
+    members: UsageMeter
+    webhookEndpoints: UsageMeter
+    companies: UsageMeter
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1521,26 +1375,20 @@ export interface UsageSummary {
 // ---------------------------------------------------------------------------
 
 /**
- * Discriminated union of the supported validation kinds. The response
- * shape is always `{ valid: boolean, errors: string[] }` plus a few
- * kind-specific enrichments (e.g. SIRENE-resolved company name on
- * `siret`).
+ * Payload accepted by `validate.run`: a full invoice draft, checked against
+ * the same rules as `invoices.create` (EN16931 / CIUS-FR) without persisting
+ * anything. Validate identifiers (SIRET, VAT) up front with `customers.lookup`.
  */
-export type ValidateParams =
-  | { kind: 'siret'; value: string }
-  | { kind: 'siren'; value: string }
-  | { kind: 'vat'; value: string }
-  | { kind: 'iban'; value: string }
-  | { kind: 'bic'; value: string }
-  | { kind: 'invoice'; invoice: Record<string, unknown> }
+export type ValidateParams = InvoiceCreateParams
 
+/** Result of a dry-run invoice validation. */
 export interface ValidateResponse {
-  object: 'validation_result'
-  kind: string
+  /** `true` when no conformity warnings were raised. */
   valid: boolean
-  errors: string[]
-  /** Kind-specific enrichments (e.g. SIRENE name, VIES company name). */
-  enrichment?: Record<string, unknown>
+  /** Human-readable conformity warnings (EN16931 / CIUS-FR), empty when valid. */
+  warnings: string[]
+  /** Version of the validation ruleset applied. */
+  schemaVersion: string
 }
 
 // ---------------------------------------------------------------------------
@@ -1558,105 +1406,20 @@ export interface NafCode {
   label: string
 }
 
-// ---------------------------------------------------------------------------
-// Cabinets (cabinet_50/200/500 plans only)
-// ---------------------------------------------------------------------------
-
-export interface Cabinet {
-  object: 'cabinet'
-  id: string
-  name: string
-  siret: string
-  plan: 'cabinet_50' | 'cabinet_200' | 'cabinet_500'
-  /** Custom white-label branding for the dashboard delivered to clients. */
-  branding?: {
-    logoUrl?: string
-    primaryColor?: string
-    customDomain?: string
-  }
-  companyCount: number
-  memberCount: number
-  created: string
-}
-
-export interface CabinetCreateParams {
-  name: string
-  siret: string
-  plan: Cabinet['plan']
-}
-
-export type CabinetBrandingUpdate = NonNullable<Cabinet['branding']>
-
-export interface CabinetCompanySummary {
-  id: string
-  name: string
-  siret: string
-  /** Most recent invoice activity timestamp; null when no activity yet. */
-  lastInvoiceAt: string | null
-  /** Pending PA submissions (deposited but not yet acknowledged). */
-  pendingPa: number
-  /** Overdue (unpaid past `due`) invoices. */
-  overdueInvoices: number
-}
-
-export interface CabinetDashboard {
-  object: 'cabinet_dashboard'
-  cabinetId: string
-  period: { start: string; end: string }
-  totals: {
-    revenueHT: string
-    revenueTTC: string
-    invoicesCount: number
-    overdueAmount: string
-    overdueCount: number
-  }
-  perCompany: Array<{
-    companyId: string
-    name: string
-    revenueHT: string
-    invoicesCount: number
-  }>
-}
-
-export interface CabinetActivity {
-  id: string
-  type: string
-  companyId: string
-  companyName: string
-  description: string
-  created: string
-}
-
-export interface CabinetBillingSplit {
-  object: 'cabinet_billing_split'
-  cabinetId: string
-  period: { start: string; end: string }
-  totalAmount: string
-  currency: Currency
-  perCompany: Array<{
-    companyId: string
-    name: string
-    /** Pro-rata share of the cabinet subscription for this company. */
-    amount: string
-  }>
+/**
+ * Legal-form input for company/customer create/update. Provide either the
+ * 4-digit INSEE `code` or the `sigle` (e.g. "SAS"); the API resolves the
+ * canonical object. Do not send `label` — the input is strictly validated.
+ */
+export interface LegalFormInput {
+  code?: string
+  sigle?: string
 }
 
 /**
- * Result of `companies.testPAConnection`. `healthy` reflects whether the PA is
- * reachable with valid credentials. `errorCode` is present only when
- * `healthy` is false:
- * - `pa_credentials_invalid` — credentials rejected (fix them);
- * - `pa_unreachable` — network/PA outage (retry later);
- * - `pa_not_supported` — the PA does not expose a directory lookup (a
- *   capability gap, not necessarily a misconfiguration);
- * - `pa_error` — other PA-side error.
+ * NAF (APE) input for company/customer create/update. Provide the Rev. 2
+ * `code` (e.g. "62.01Z" or "6201Z"); the API resolves the canonical object.
  */
-export interface PATestResult {
-  object: 'pa_connection_test'
-  healthy: boolean
-  latencyMs: number
-  details: string
-  provider: string
-  testedAt: string
-  errorCode?: 'pa_credentials_invalid' | 'pa_unreachable' | 'pa_not_supported' | 'pa_error'
+export interface NafCodeInput {
+  code: string
 }

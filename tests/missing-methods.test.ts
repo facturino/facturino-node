@@ -1,8 +1,7 @@
 /**
  * Tests for methods backfilled to reach 100% API coverage:
- *   - account: scheduleDeletion, cancelDeletion, requestExport,
- *     downloadExport, updateNotifications
- *   - companies: create, updateInvoicingSettings, addMilestone
+ *   - account: requestExport, downloadExport
+ *   - companies: create, addMilestone
  *   - invoices: createPortalLink
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -26,36 +25,11 @@ function lastCall(): [string, RequestInit] {
   return [url, init]
 }
 
-describe('Account — RGPD lifecycle', () => {
+describe('Account — RGPD data export', () => {
   let f: Facturino
   beforeEach(() => {
     mockFetch.mockReset()
     f = new Facturino('fac_test_x')
-  })
-
-  it('POST /v1/account/schedule-deletion schedules the 30-day grace period', async () => {
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse(200, {
-        object: 'account_deletion',
-        deletionScheduledAt: '2026-06-19T00:00:00.000Z',
-        message: 'Account scheduled for deletion in 30 days.',
-      }),
-    )
-    const res = await f.account.scheduleDeletion()
-    const [url, init] = lastCall()
-    expect(url).toContain('/v1/account/schedule-deletion')
-    expect(init.method).toBe('POST')
-    expect(res.deletionScheduledAt).toMatch(/^2026-/)
-  })
-
-  it('POST /v1/account/cancel-deletion clears a pending deletion', async () => {
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse(200, { object: 'account_deletion', deletionScheduledAt: null }),
-    )
-    await f.account.cancelDeletion()
-    const [url, init] = lastCall()
-    expect(url).toContain('/v1/account/cancel-deletion')
-    expect(init.method).toBe('POST')
   })
 
   it('POST /v1/account/export starts an RGPD export job', async () => {
@@ -87,15 +61,6 @@ describe('Account — RGPD lifecycle', () => {
     expect(init.method).toBe('GET')
     expect(res.url).toContain('https://')
   })
-
-  it('PATCH /v1/account/notifications updates email broadcast preferences', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(200, { invoicePaid: false, productNews: true }))
-    await f.account.updateNotifications({ invoicePaid: false, productNews: true })
-    const [url, init] = lastCall()
-    expect(url).toContain('/v1/account/notifications')
-    expect(init.method).toBe('PATCH')
-    expect(init.body).toContain('"invoicePaid":false')
-  })
 })
 
 describe('Companies — backfilled methods', () => {
@@ -124,15 +89,6 @@ describe('Companies — backfilled methods', () => {
     expect(url).toContain('/v1/companies')
     expect(init.method).toBe('POST')
     expect(init.body).toContain('"siret":"44306184100047"')
-  })
-
-  it('PATCH /v1/companies/:id/invoicing-settings updates invoicing config', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(200, { id: 'comp_xyz' }))
-    await f.companies.updateInvoicingSettings('comp_xyz', { vatRegime: 'franchise' })
-    const [url, init] = lastCall()
-    expect(url).toContain('/v1/companies/comp_xyz/invoicing-settings')
-    expect(init.method).toBe('PATCH')
-    expect(init.body).toContain('"vatRegime":"franchise"')
   })
 
   it('POST /v1/companies/:id/milestones marks an onboarding milestone', async () => {

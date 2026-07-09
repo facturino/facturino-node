@@ -1,6 +1,7 @@
 import { HttpClient } from './client.js'
 import { Webhooks } from './webhooks.js'
 import { Invoices } from './resources/invoices.js'
+import { Payments } from './resources/payments.js'
 import { Customers } from './resources/customers.js'
 import { Products } from './resources/products.js'
 import { Quotes } from './resources/quotes.js'
@@ -9,23 +10,17 @@ import { Events } from './resources/events.js'
 import { WebhookEndpoints } from './resources/webhookEndpoints.js'
 import { RecurringInvoices } from './resources/recurringInvoices.js'
 import { Companies } from './resources/companies.js'
-import { Members } from './resources/members.js'
-import { ApiKeys } from './resources/apiKeys.js'
 import { Exports } from './resources/exports.js'
 import { EReportingResource } from './resources/ereporting.js'
 import { Jobs } from './resources/jobs.js'
 import { Sandbox } from './resources/sandbox.js'
 import { ReceivedInvoices } from './resources/received-invoices.js'
-import { Mfa } from './resources/mfa.js'
 import { Reporting } from './resources/reporting.js'
 import { AccountResource } from './resources/account.js'
 import { Billing } from './resources/billing.js'
-import { Notifications } from './resources/notifications.js'
-import { Settings } from './resources/settings.js'
 import { Usage } from './resources/usage.js'
 import { Validate } from './resources/validate.js'
 import { Reference } from './resources/reference.js'
-import { Cabinets } from './resources/cabinets.js'
 import { Archives } from './resources/archives.js'
 import type { FacturinoConfig } from './types.js'
 
@@ -33,8 +28,8 @@ import type { FacturinoConfig } from './types.js'
 class Facturino {
   readonly account: AccountResource
   readonly billing: Billing
-  readonly cabinets: Cabinets
   readonly invoices: Invoices
+  readonly payments: Payments
   readonly customers: Customers
   readonly products: Products
   readonly quotes: Quotes
@@ -43,20 +38,15 @@ class Facturino {
   readonly webhookEndpoints: WebhookEndpoints
   readonly recurringInvoices: RecurringInvoices
   readonly companies: Companies
-  readonly members: Members
-  readonly apiKeys: ApiKeys
   readonly exports: Exports
   readonly ereporting: EReportingResource
   readonly jobs: Jobs
-  readonly notifications: Notifications
   readonly reference: Reference
   readonly sandbox: Sandbox
-  readonly settings: Settings
   readonly usage: Usage
   readonly validate: Validate
   readonly webhooks: Webhooks
   readonly receivedInvoices: ReceivedInvoices
-  readonly mfa: Mfa
   readonly reporting: Reporting
   readonly archives: Archives
 
@@ -65,8 +55,8 @@ class Facturino {
 
     this.account = new AccountResource(client)
     this.billing = new Billing(client)
-    this.cabinets = new Cabinets(client)
     this.invoices = new Invoices(client)
+    this.payments = new Payments(client)
     this.customers = new Customers(client)
     this.products = new Products(client)
     this.quotes = new Quotes(client)
@@ -75,20 +65,15 @@ class Facturino {
     this.webhookEndpoints = new WebhookEndpoints(client)
     this.recurringInvoices = new RecurringInvoices(client)
     this.companies = new Companies(client)
-    this.members = new Members(client)
-    this.apiKeys = new ApiKeys(client)
     this.exports = new Exports(client)
     this.ereporting = new EReportingResource(client)
     this.jobs = new Jobs(client)
-    this.notifications = new Notifications(client)
     this.reference = new Reference(client)
     this.sandbox = new Sandbox(client)
-    this.settings = new Settings(client)
     this.usage = new Usage(client)
     this.validate = new Validate(client)
     this.webhooks = new Webhooks()
     this.receivedInvoices = new ReceivedInvoices(client)
-    this.mfa = new Mfa(client)
     this.reporting = new Reporting(client)
     this.archives = new Archives(client)
   }
@@ -134,6 +119,7 @@ export type {
   InvoiceLineItemParam,
   InvoiceUpdateParams,
   InvoiceListParams,
+  IncomingInvoiceCreateParams,
   InvoiceStatusResponse,
   InvoiceVerifyResponse,
   DocumentUrlResponse,
@@ -149,6 +135,7 @@ export type {
   CustomerListParams,
   CustomerLookupParams,
   SireneLookupResponse,
+  SireneCompany,
   Product,
   PriceHistoryEntry,
   ProductCreateParams,
@@ -186,15 +173,6 @@ export type {
   Company,
   CompanyUpdateParams,
   CgvResponse,
-  PATestResult,
-  MemberRole,
-  MemberStatus,
-  Member,
-  MemberInviteParams,
-  MemberUpdateParams,
-  ApiKeyPermission,
-  ApiKey,
-  ApiKeyCreateParams,
   FecExportParams,
   EReportingType,
   EReportingStatus,
@@ -215,12 +193,6 @@ export type {
   ReceivedInvoiceRefuseParams,
   ReceivedInvoiceRecordPaymentParams,
   ReceivedInvoiceActionResponse,
-  MfaSetupResponse,
-  MfaVerifyParams,
-  MfaVerifyResponse,
-  MfaDisableParams,
-  MfaDisableResponse,
-  MfaBackupCodesResponse,
   VatReportParams,
   VatReportBreakdown,
   VatReport,
@@ -232,21 +204,7 @@ export type {
   // Billing
   BillingCycle,
   BillingSubscription,
-  BillingSubscriptionUpdateParams,
-  BillingCheckoutParams,
-  BillingPauseParams,
-  BillingPortalParams,
   PlatformInvoice,
-  // Notifications
-  NotificationChannel,
-  Notification,
-  NotificationPreferences,
-  NotificationPreferencesUpdate,
-  // Settings
-  AccountingSettings,
-  AccountingSettingsUpdate,
-  ReminderSettings,
-  ReminderSettingsUpdate,
   // Usage
   UsageMeter,
   UsageSummary,
@@ -256,14 +214,8 @@ export type {
   // Reference
   LegalForm,
   NafCode,
-  // Cabinets
-  Cabinet,
-  CabinetCreateParams,
-  CabinetBrandingUpdate,
-  CabinetCompanySummary,
-  CabinetDashboard,
-  CabinetActivity,
-  CabinetBillingSplit,
+  LegalFormInput,
+  NafCodeInput,
 } from './types.js'
 
 export {

@@ -16,6 +16,8 @@ import type {
   PaymentTokenResponse,
   PaginatedResponse,
   LifecycleEntry,
+  IncomingInvoiceCreateParams,
+  ReceivedInvoice,
   RequestOptions,
 } from '../types.js'
 
@@ -39,7 +41,7 @@ export class Invoices {
    * Retrieve an invoice. Pass `expand` to inline related objects in the
    * response under `invoice.expanded` — `customer`, `items.product`, and
    * `credit_notes`. With `credit_notes`, the response also carries
-   * `expanded.net_balance` (TTC minus credited amounts, as a Decimal string).
+   * `expanded.net_balance` (TTC minus credited amounts, in integer cents).
    */
   async get(id: string, params?: InvoiceRetrieveParams): Promise<Invoice> {
     const expand = params?.expand
@@ -184,13 +186,16 @@ export class Invoices {
     return this.client.post(`/v1/invoices/${id}/portal-link`, undefined, options)
   }
 
-  /** Create an incoming invoice received from a supplier. */
-  async createIncoming(params: Record<string, unknown>, options?: RequestOptions): Promise<Invoice> {
-    return this.client.post<Invoice>('/v1/invoices/incoming', params, options)
+  /** Record a supplier invoice received outside the platform (manual entry). */
+  async createIncoming(
+    params: IncomingInvoiceCreateParams,
+    options?: RequestOptions,
+  ): Promise<ReceivedInvoice> {
+    return this.client.post<ReceivedInvoice>('/v1/invoices/incoming', params, options)
   }
 
-  /** List incoming invoices. */
-  listIncoming(params?: InvoiceListParams): AutoPaginatingList<Invoice> {
-    return new AutoPaginatingList<Invoice>(this.client, '/v1/invoices/incoming', params)
+  /** List inbound supplier invoices (manual entries + e-invoices received via the PA). */
+  listIncoming(params?: InvoiceListParams): AutoPaginatingList<ReceivedInvoice> {
+    return new AutoPaginatingList<ReceivedInvoice>(this.client, '/v1/invoices/incoming', params)
   }
 }

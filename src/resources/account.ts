@@ -1,34 +1,23 @@
 import type { HttpClient } from '../client.js'
 import type { Account } from '../types.js'
 
-/** Response returned when a deletion is scheduled. */
-export interface AccountDeletionResponse {
-  object: 'account_deletion'
-  deletionScheduledAt: string
-  message: string
-}
-
-/** Acknowledgement returned by `POST /v1/account/export`. */
+/**
+ * Result of `POST /v1/account/export`. The export is prepared synchronously and
+ * is ready to download immediately via {@link Account.downloadExport}.
+ */
 export interface AccountExportResponse {
-  object: 'account_export'
-  exportId: string
-  status: 'pending' | 'processing' | 'ready'
-  message: string
+  object: 'export'
+  id: string
+  /** ISO 8601 expiry of the prepared export. */
+  expires_at: string
 }
 
 /** Short-lived (5 min) signed-URL response for a prepared RGPD export. */
 export interface AccountExportDownloadResponse {
+  object: 'export_url'
   url: string
-  expiresAt: string
-}
-
-/** Per-channel email-notification preferences. */
-export interface AccountNotificationPreferencesUpdate {
-  invoicePaid?: boolean
-  invoiceOverdue?: boolean
-  quoteAccepted?: boolean
-  paReceived?: boolean
-  productNews?: boolean
+  /** ISO 8601 expiry of the signed URL (5 minutes). */
+  expires_at: string
 }
 
 /**
@@ -38,8 +27,8 @@ export interface AccountNotificationPreferencesUpdate {
  * Facturino" surface so users can confirm which company and which
  * environment (`fac_test_` vs `fac_live_`) their requests target.
  *
- * Also exposes the RGPD lifecycle endpoints: schedule / cancel deletion
- * (article 17) and request / download a data export (article 20).
+ * Also exposes the RGPD data-export endpoints (article 20): request a
+ * full export and download it once prepared.
  */
 export class AccountResource {
   constructor(private readonly client: HttpClient) {}
@@ -52,25 +41,6 @@ export class AccountResource {
    */
   async retrieve(): Promise<Account> {
     return this.client.get<Account>('/v1/account')
-  }
-
-  /**
-   * Schedule the authenticated account for deletion in 30 days
-   * (RGPD article 17). The user receives a confirmation email and a
-   * J-7 reminder. The deletion is reversible until the grace period
-   * elapses — call {@link cancelDeletion} to cancel.
-   *
-   * Returns `409 conflict` if a deletion is already scheduled, or
-   * `400 invalid_request_error` while the account still has an active
-   * paid subscription.
-   */
-  async scheduleDeletion(): Promise<AccountDeletionResponse> {
-    return this.client.post<AccountDeletionResponse>('/v1/account/schedule-deletion')
-  }
-
-  /** Cancel a pending account deletion (within the 30-day grace window). */
-  async cancelDeletion(): Promise<{ object: 'account_deletion'; deletionScheduledAt: null }> {
-    return this.client.post('/v1/account/cancel-deletion')
   }
 
   /**
@@ -92,22 +62,6 @@ export class AccountResource {
   async downloadExport(exportId: string): Promise<AccountExportDownloadResponse> {
     return this.client.get<AccountExportDownloadResponse>(
       `/v1/account/exports/${exportId}/download`,
-    )
-  }
-
-  /**
-   * Update the per-channel email-notification preferences for the
-   * authenticated user. This endpoint manages broadcast preferences
-   * (which transactional emails the user wants to receive); per-event
-   * channel preferences live under
-   * {@link Notifications.updatePreferences} instead.
-   */
-  async updateNotifications(
-    params: AccountNotificationPreferencesUpdate,
-  ): Promise<AccountNotificationPreferencesUpdate> {
-    return this.client.patch<AccountNotificationPreferencesUpdate>(
-      '/v1/account/notifications',
-      params,
     )
   }
 }
