@@ -22,6 +22,7 @@ import { Usage } from './resources/usage.js'
 import { Validate } from './resources/validate.js'
 import { Reference } from './resources/reference.js'
 import { Archives } from './resources/archives.js'
+import { Health } from './resources/health.js'
 import type { FacturinoConfig } from './types.js'
 
 /** Facturino API client for French e-invoicing — initialize with your API key to access all resources. */
@@ -49,6 +50,7 @@ class Facturino {
   readonly receivedInvoices: ReceivedInvoices
   readonly reporting: Reporting
   readonly archives: Archives
+  readonly health: Health
 
   constructor(apiKey: string, config?: FacturinoConfig) {
     const client = new HttpClient(apiKey, config)
@@ -76,6 +78,7 @@ class Facturino {
     this.receivedInvoices = new ReceivedInvoices(client)
     this.reporting = new Reporting(client)
     this.archives = new Archives(client)
+    this.health = new Health(client)
   }
 }
 
@@ -216,6 +219,8 @@ export type {
   NafCode,
   LegalFormInput,
   NafCodeInput,
+  PaProvider,
+  HealthStatus,
 } from './types.js'
 
 export {

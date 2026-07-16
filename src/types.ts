@@ -1423,3 +1423,32 @@ export interface LegalFormInput {
 export interface NafCodeInput {
   code: string
 }
+
+/**
+ * A supported Plateforme Agréée (PA), returned by `reference.listPaProviders()`.
+ * Public catalogue — use it to render a provider picker and the credential
+ * fields each PA requires. Facturino is BYOPA: the customer brings their own
+ * PA credentials, so integrations typically surface this list at connect time.
+ */
+export interface PaProvider {
+  slug: string
+  name: string
+  description: string
+  logoUrl: string | null
+  websiteUrl: string | null
+  documentationUrl: string | null
+  signupUrl: string | null
+  authType: string
+  credentialLabel1: string | null
+  credentialLabel2: string | null
+  requiresBaseUrl: boolean
+  pricingSummary: string | null
+}
+
+/** Service health snapshot returned by `health.check()`. */
+export interface HealthStatus {
+  status: string
+  version: string
+  region: string
+  timestamp: string
+}

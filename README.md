@@ -129,8 +129,18 @@ facturino.jobs.poll('job_xxx')  // wait for async completion
 facturino.sandbox.resetData()
 facturino.sandbox.simulateStatus('inv_xxx', { status: 'approved' })
 
+// Reference & health (public, no auth)
+facturino.reference.listLegalForms({ search: 'SAS' })
+facturino.reference.listPaProviders()  // supported Plateformes Agréées (BYOPA)
+facturino.health.check()
+
 // Also: companies, events, webhookEndpoints, products
 ```
+
+> **Public token endpoints** — the recipient-facing portals (`/pay/:token`,
+> `/portal/:token`, `/quote-portal/:token`) are intentionally not exposed by the
+> SDK: they are opened by the end recipient through a hosted page, not called
+> with an API key.
 
 ## Webhooks
 

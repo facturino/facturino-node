@@ -1,5 +1,5 @@
 import type { HttpClient } from '../client.js'
-import type { LegalForm, NafCode, PaginatedResponse } from '../types.js'
+import type { LegalForm, NafCode, PaProvider, PaginatedResponse } from '../types.js'
 
 /** Encode a flat object as a `?k=v&…` query string (skips undefined/null). */
 function buildQuery(params: Record<string, unknown>): string {
@@ -49,5 +49,15 @@ export class Reference {
   }): Promise<PaginatedResponse<NafCode>> {
     const qs = params ? buildQuery(params) : ''
     return this.client.get<PaginatedResponse<NafCode>>(`/v1/reference/naf-codes${qs}`)
+  }
+
+  /**
+   * List the supported Plateformes Agréées (PA). Public catalogue — no auth,
+   * no filter; fetch once and cache. Use it to render a provider picker and the
+   * credential fields each PA requires (Facturino is BYOPA — the customer
+   * brings their own PA credentials at connect time).
+   */
+  async listPaProviders(): Promise<{ object: 'list'; data: PaProvider[] }> {
+    return this.client.get<{ object: 'list'; data: PaProvider[] }>('/v1/pa-providers')
   }
 }
