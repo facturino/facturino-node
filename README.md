@@ -90,10 +90,11 @@ facturino.invoices.list({ convertedFrom: 'quo_xxx' })  // invoices issued from a
 // Payments (sub-resource)
 facturino.invoices.payments.create('inv_xxx', { amount: 10000, method: 'transfer', paidAt: '...' })
 facturino.invoices.payments.list('inv_xxx')
+facturino.invoices.payments.cancel('inv_xxx', 'pay_xxx')
 
 // Customers
 facturino.customers.create(params)
-facturino.customers.lookup({ siret: '12345678901234' })
+facturino.customers.lookup({ siret: '73282932000074' })
 // contacts[].role: 'billing' | 'technical' | 'main' (billing receives invoices)
 
 // Products

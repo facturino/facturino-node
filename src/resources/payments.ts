@@ -3,6 +3,7 @@ import { AutoPaginatingList } from '../pagination.js'
 import type {
   Payment,
   PaymentCreateParams,
+  PaymentCancelResult,
   PaginationParams,
   RequestOptions,
 } from '../types.js'
@@ -31,6 +32,23 @@ export class Payments {
       this.client,
       `/v1/invoices/${invoiceId}/payments`,
       params,
+    )
+  }
+
+  /**
+   * Cancel a recorded payment. The payment is kept for the audit trail
+   * (status `cancelled`) and the invoice is re-settled from the reversal.
+   * Rejected once the payment has been reported to the tax authority.
+   */
+  async cancel(
+    invoiceId: string,
+    paymentId: string,
+    options?: RequestOptions,
+  ): Promise<PaymentCancelResult> {
+    return this.client.post<PaymentCancelResult>(
+      `/v1/invoices/${invoiceId}/payments/${paymentId}/cancel`,
+      undefined,
+      options,
     )
   }
 }

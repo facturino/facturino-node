@@ -103,6 +103,7 @@ export type {
   Currency,
   Unit,
   VatCode,
+  VatexCode,
   PaymentMethod,
   InvoiceType,
   InvoiceStatus,

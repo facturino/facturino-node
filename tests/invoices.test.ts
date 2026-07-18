@@ -306,6 +306,26 @@ describe('Invoices resource', () => {
       const page = await facturino.invoices.payments.list('inv_123')
       expect(page.data).toHaveLength(2)
     })
+
+    it('should POST /v1/invoices/:id/payments/:paymentId/cancel', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, {
+          id: 'pay_123',
+          object: 'payment',
+          status: 'cancelled',
+          invoiceStatus: 'partially_paid',
+          amountDue: 5000,
+        })
+      )
+
+      const result = await facturino.invoices.payments.cancel('inv_123', 'pay_123')
+      expect(result.status).toBe('cancelled')
+      expect(result.amountDue).toBe(5000)
+
+      const [url, opts] = mockFetch.mock.calls[0]
+      expect(url).toContain('/v1/invoices/inv_123/payments/pay_123/cancel')
+      expect(opts.method).toBe('POST')
+    })
   })
 
   describe('getPdf', () => {

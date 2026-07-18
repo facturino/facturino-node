@@ -91,6 +91,7 @@ export interface LineItem {
   lineAmount: number
   vatRate: number
   vatCode: VatCode
+  vatexCode?: VatexCode
   vatAmount: number
   lineTotal: number
   product: string | null
@@ -99,6 +100,7 @@ export interface LineItem {
 export interface VatBreakdown {
   rate: number
   code: VatCode
+  vatexCode?: VatexCode
   base: number
   amount: number
 }
@@ -156,6 +158,24 @@ export type VatCode =
   | 'K'
   | 'O'
   | 'VATEX-FR-FRANCHISE'
+
+/**
+ * Specific VATEX exemption code (BT-121). Set it on a line when the exemption
+ * basis differs from the category default (e.g. Qualiopi training, margin
+ * scheme, Corsica/DOM, BTP reverse charge) — otherwise the category default
+ * applies (category E defaults to the 293 B franchise mention).
+ */
+export type VatexCode =
+  | 'VATEX-EU-AE'
+  | 'VATEX-EU-D'
+  | 'VATEX-EU-F'
+  | 'VATEX-EU-G'
+  | 'VATEX-EU-IC'
+  | 'VATEX-EU-O'
+  | 'VATEX-FR-FRANCHISE'
+  | 'VATEX-FR-CNWVAT'
+  | 'VATEX-FR-AUTOLIQ'
+  | 'VATEX-FR-261'
 
 export type PaymentMethod =
   | 'transfer'
@@ -303,6 +323,18 @@ export interface InvoiceCreateDates {
   serviceEnd?: string
 }
 
+/** A deposit invoice (386) linked to this balance invoice; its TTC is deducted (BT-113). */
+export interface InvoiceDepositParam {
+  invoiceId: string
+}
+
+/** A payment-schedule instalment. `amount` in integer centimes; last instalment on the due date. */
+export interface InvoiceScheduleParam {
+  amount: number
+  dueDate: string
+  label?: string
+}
+
 export interface InvoiceCreateParams {
   customerId: string
   type?: InvoiceType
@@ -312,6 +344,10 @@ export interface InvoiceCreateParams {
   payment: InvoicePaymentTerms
   notes?: string
   purchaseOrderNumber?: string
+  /** Deposit invoices to deduct from the amount due (CGI art. 289). Max 20. */
+  deposits?: InvoiceDepositParam[]
+  /** Payment schedule (2 to 12 instalments) summing to the total. */
+  schedule?: InvoiceScheduleParam[]
   metadata?: Record<string, unknown>
   /** Finalize the invoice in the same call (assigns its number). */
   autoFinalize?: boolean
@@ -329,6 +365,9 @@ export interface InvoiceLineItemParam {
   unitPrice: number
   vatRate: number
   vatCode: VatCode
+  /** Optional specific VATEX exemption code (BT-121) when the basis differs from
+   *  the category default. See {@link VatexCode}. */
+  vatexCode?: VatexCode
   discountPercent?: number
   product?: string | null
 }
@@ -340,6 +379,10 @@ export interface InvoiceUpdateParams {
   payment?: Partial<InvoicePaymentTerms>
   notes?: string
   purchaseOrderNumber?: string
+  /** Replace the linked deposit invoices; an empty array unlinks them. */
+  deposits?: InvoiceDepositParam[]
+  /** Replace the payment schedule. */
+  schedule?: InvoiceScheduleParam[]
   metadata?: Record<string, unknown>
 }
 
@@ -435,6 +478,17 @@ export interface PaymentCreateParams {
   method: PaymentMethod | 'other'
   reference?: string
   paidAt: string
+}
+
+/** Result of cancelling a payment — the invoice is re-settled from the reversal. */
+export interface PaymentCancelResult {
+  id: string
+  object: 'payment'
+  status: 'cancelled'
+  /** Recomputed invoice status after the reversal. */
+  invoiceStatus: InvoiceStatus
+  /** Recomputed amount due, in integer centimes. */
+  amountDue: number
 }
 
 // ---------------------------------------------------------------------------
