@@ -1373,17 +1373,18 @@ export interface BillingSubscription {
   cancelAtPeriodEnd: boolean
 }
 
-/** Facturino → user platform invoice (INTEK CENTER SAS, monthly billing). */
+/** Subscription (platform) invoice issued by INTEK CENTER to the Facturino account. */
 export interface PlatformInvoice {
   object: 'platform_invoice'
   id: string
+  status: string
   number: string
-  status: 'paid' | 'open' | 'void'
-  amount: string
-  currency: Currency
-  periodStart: string
-  periodEnd: string
-  invoicePdfPath: string | null
+  /** Monetary totals as Decimal strings (HT, VAT, TTC…). */
+  totals: Record<string, string>
+  /** Document dates (issued, due, period…). */
+  dates: Record<string, string>
+  items: Array<{ description: string; lineTotal: number }>
+  metadata: Record<string, unknown>
   created: string
 }
 

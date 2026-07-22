@@ -46,7 +46,7 @@ export class Billing {
    * within minutes — fetch it just-in-time when the user clicks
    * "Download", do not store it.
    */
-  async getInvoicePdf(invoiceId: string): Promise<{ url: string; expires_at: string }> {
+  async getInvoicePdf(invoiceId: string): Promise<{ object: 'file_url'; url: string; expires_in: number }> {
     return this.client.get(`/v1/billing/invoices/${invoiceId}/pdf`)
   }
 }
