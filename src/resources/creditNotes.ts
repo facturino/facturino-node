@@ -7,6 +7,7 @@ import type {
   CreditNoteListParams,
   DocumentUrlResponse,
   JobResponse,
+  PaymentMethod,
   RequestOptions,
 } from '../types.js'
 
@@ -63,6 +64,19 @@ export class CreditNotes {
     | { status: 'pending'; creditNoteId: string; jobId: string; pollUrl: string; reason: string }
   > {
     return this.client.post(`/v1/credit-notes/${id}/email`, params, options)
+  }
+
+  /**
+   * Record the disbursement of a finalized credit note back to the customer.
+   * Writes a negative `refund` payment on the linked invoice (mirrors the app).
+   * `amount` is in integer centimes and defaults to the full credit-note total.
+   */
+  async refund(
+    id: string,
+    params?: { amount?: number; method?: PaymentMethod; refundedAt?: string },
+    options?: RequestOptions,
+  ): Promise<{ id: string; object: 'refund'; creditNoteId: string; invoiceId: string; amount: number }> {
+    return this.client.post(`/v1/credit-notes/${id}/refund`, params, options)
   }
 
   async getPdf(id: string): Promise<DocumentUrlResponse | JobResponse> {

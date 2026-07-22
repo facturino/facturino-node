@@ -122,3 +122,36 @@ describe('Reference', () => {
     expect(url).toContain('/v1/reference/naf-codes')
   })
 })
+
+describe('CreditNotes refund', () => {
+  let f: Facturino
+  beforeEach(() => {
+    mockFetch.mockReset()
+    f = new Facturino('fac_test_x')
+  })
+
+  it('POST /v1/credit-notes/:id/refund with amount + method', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(201, { id: 'ref_1', object: 'refund', creditNoteId: 'crn_1', invoiceId: 'inv_1', amount: 12000 }),
+    )
+    const res = await f.creditNotes.refund('crn_1', { amount: 12000, method: 'transfer', refundedAt: '2026-05-14' })
+    const [url, init] = lastCall()
+    expect(url).toContain('/v1/credit-notes/crn_1/refund')
+    expect(init.method).toBe('POST')
+    const body = JSON.parse(init.body as string)
+    expect(body.amount).toBe(12000)
+    expect(body.method).toBe('transfer')
+    expect(res.object).toBe('refund')
+    expect(res.amount).toBe(12000)
+  })
+
+  it('POST /v1/credit-notes/:id/refund with no body (full refund)', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(201, { id: 'ref_2', object: 'refund', creditNoteId: 'crn_2', invoiceId: 'inv_2', amount: 5000 }),
+    )
+    await f.creditNotes.refund('crn_2')
+    const [url, init] = lastCall()
+    expect(url).toContain('/v1/credit-notes/crn_2/refund')
+    expect(init.method).toBe('POST')
+  })
+})
