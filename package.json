@@ -6,7 +6,7 @@
   "author": "Facturino <dev@facturino.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/facturino/facturino-node.git"
+    "url": "git+https://github.com/facturino/facturino-node.git"
   },
   "homepage": "https://facturino.com/docs/api",
   "bugs": {
@@ -61,6 +61,6 @@
   "devDependencies": {
     "@types/node": "^20.19.37",
     "typescript": "5.7.3",
-    "vitest": "3.2.4"
+    "vitest": "3.2.7"
   }
 }
