@@ -35,7 +35,6 @@ export class Billing {
   async listInvoices(params?: {
     limit?: number
     starting_after?: string
-    ending_before?: string
   }): Promise<PaginatedResponse<PlatformInvoice>> {
     const qs = params ? buildQuery(params) : ''
     return this.client.get<PaginatedResponse<PlatformInvoice>>(`/v1/billing/invoices${qs}`)

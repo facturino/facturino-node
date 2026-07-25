@@ -47,7 +47,7 @@ export class AutoPaginatingList<T extends { id: string }>
 
       // Forward filter params (status, type, active, etc.)
       for (const [key, value] of Object.entries(this.params)) {
-        if (key === 'limit' || key === 'starting_after' || key === 'ending_before') continue
+        if (key === 'limit' || key === 'starting_after') continue
         if (value !== undefined && value !== null) {
           queryParams[key] = String(value)
         }

@@ -24,7 +24,6 @@ export interface RequestOptions {
 export interface PaginationParams {
   limit?: number
   starting_after?: string
-  ending_before?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -438,6 +437,14 @@ export interface JobResponse {
   type: string
   status: string
   invoiceId?: string
+  /** Signed download URL — present once the job has a deliverable. */
+  download_url?: string
+  /** Validity of `download_url`, in seconds. */
+  expires_in?: number
+  /** Alias of `download_url` (callable response shape). */
+  url?: string
+  /** ISO 8601 expiry of the signed URL. */
+  expiresAt?: string
 }
 
 export interface PaymentLinkResponse {

@@ -2,14 +2,16 @@ import type { HttpClient } from '../client.js'
 import type { Account } from '../types.js'
 
 /**
- * Result of `POST /v1/account/export`. The export is prepared synchronously and
- * is ready to download immediately via {@link Account.downloadExport}.
+ * Result of `POST /v1/account/export` (202 Accepted). The export runs
+ * asynchronously — poll `exports.getExportStatus(id)` until the job exposes
+ * `download_url`.
  */
 export interface AccountExportResponse {
-  object: 'export'
+  object: 'job'
+  /** Job id (`job_…`) — poll it via `exports.getExportStatus`. */
   id: string
-  /** ISO 8601 expiry of the prepared export. */
-  expires_at: string
+  type: 'rgpd_export'
+  status: string
 }
 
 /** Short-lived (5 min) signed-URL response for a prepared RGPD export. */
@@ -45,19 +47,21 @@ export class AccountResource {
 
   /**
    * Request a full export of the account's data (RGPD article 20).
-   * Returns immediately with an `exportId`; the file is prepared
-   * asynchronously and the user receives an in-app notification when
-   * ready. Use {@link downloadExport} with the returned id to fetch
-   * the actual signed-URL.
+   * Returns 202 with a job id; the file is prepared asynchronously.
+   * Poll `exports.getExportStatus(id)` until the job carries a
+   * `download_url` (the user also receives an in-app notification).
    */
   async requestExport(): Promise<AccountExportResponse> {
     return this.client.post<AccountExportResponse>('/v1/account/export')
   }
 
   /**
-   * Return a short-lived (5 minutes) signed URL to download a
-   * previously-prepared RGPD export. The export metadata is keyed
-   * under the authenticated user — cross-user access is impossible.
+   * Return a short-lived (5 minutes) signed URL for a prepared RGPD
+   * export. Takes the `rgpdexp_…` export id delivered by the
+   * `export_ready` notification — NOT the `job_…` id returned by
+   * {@link requestExport} (poll that one via `exports.getExportStatus`).
+   * The export metadata is keyed under the authenticated user —
+   * cross-user access is impossible.
    */
   async downloadExport(exportId: string): Promise<AccountExportDownloadResponse> {
     return this.client.get<AccountExportDownloadResponse>(
