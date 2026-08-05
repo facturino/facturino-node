@@ -183,6 +183,7 @@ export type PaymentMethod =
   | 'cash'
   | 'direct_debit'
   | 'sepa'
+  | 'paypal'
 
 // ---------------------------------------------------------------------------
 // Invoice

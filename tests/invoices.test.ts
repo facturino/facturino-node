@@ -292,6 +292,21 @@ describe('Invoices resource', () => {
       expect(body.amount).toBe(10000)
     })
 
+    it('should accept the paypal payment method', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(201, { id: 'pay_pp', object: 'payment', amount: '100.00', method: 'paypal' })
+      )
+      // `method: 'paypal'` type-checks against PaymentMethod (union now includes it).
+      const result = await facturino.invoices.payments.create('inv_123', {
+        amount: 10000,
+        method: 'paypal',
+        paidAt: '2026-03-15T00:00:00Z',
+      })
+      expect(result.method).toBe('paypal')
+      const [, opts] = mockFetch.mock.calls[0]
+      expect(JSON.parse(opts.body).method).toBe('paypal')
+    })
+
     it('should GET /v1/invoices/:id/payments', async () => {
       mockFetch.mockResolvedValueOnce(
         jsonResponse(200, {
