@@ -4,6 +4,14 @@ All notable changes to `@facturino/node` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.0] - 2026-08-19
+
+### Added
+- `Company.vatRegime` and `CompanyUpdateParams.vatRegime` now accept
+  `normal_quarterly` (réel normal under quarterly VAT returns — e-reporting
+  transmitted monthly, before the 10th). Additive and backward-compatible;
+  existing values are unaffected.
+
 ## [1.1.0] - 2026-08-05
 
 ### Added

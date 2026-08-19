@@ -1035,7 +1035,7 @@ export interface Company {
   phone?: string
   website?: string
   logoPath?: string
-  vatRegime: 'normal' | 'franchise' | 'simplified' | 'debit'
+  vatRegime: 'normal' | 'normal_quarterly' | 'franchise' | 'simplified' | 'debit'
   billingEmail?: string
   bankDetails: BankDetails
   defaultPaymentTerms: number
@@ -1054,7 +1054,7 @@ export interface CompanyUpdateParams {
   email?: string
   phone?: string
   website?: string
-  vatRegime?: 'normal' | 'franchise' | 'simplified' | 'debit'
+  vatRegime?: 'normal' | 'normal_quarterly' | 'franchise' | 'simplified' | 'debit'
   billingEmail?: string
   bankDetails?: BankDetails
   defaultPaymentTerms?: number

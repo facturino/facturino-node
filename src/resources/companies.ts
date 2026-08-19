@@ -22,7 +22,7 @@ export interface CompanyCreateParams {
   tvaIntracom?: string
   rcs?: string
   capitalSocial?: string
-  vatRegime?: 'normal' | 'franchise' | 'simplified' | 'debit'
+  vatRegime?: 'normal' | 'normal_quarterly' | 'franchise' | 'simplified' | 'debit'
   email?: string
   phone?: string
   website?: string
