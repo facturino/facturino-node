@@ -12,7 +12,7 @@ describe('Webhooks', () => {
       id: 'evt_123',
       object: 'event',
       type: 'invoice.finalized',
-      apiVersion: '2026-03-01',
+      apiVersion: '2026-09-01',
       data: { id: 'inv_456', object: 'invoice', status: 'finalized' },
       delivered: false,
       livemode: false,

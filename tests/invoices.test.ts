@@ -34,14 +34,10 @@ describe('Invoices resource', () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(201, mockInvoice))
 
       const result = await facturino.invoices.create({
-        customer: 'cus_456',
-        items: [{
-          description: 'Consulting',
-          quantity: 1,
-          unit_price: 10000,
-          vat_rate: 2000,
-        }],
-      })
+        customerId: 'cus_456',
+        taxDecisionId: 'taxdec_1',
+        decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+      } as never)
 
       expect(result.id).toBe('inv_123')
       expect(result.status).toBe('draft')
@@ -50,20 +46,31 @@ describe('Invoices resource', () => {
       expect(url).toContain('/v1/invoices')
       expect(opts.method).toBe('POST')
       const body = JSON.parse(opts.body)
-      expect(body.customer).toBe('cus_456')
-      expect(body.items[0].unit_price).toBe(10000)
+      expect(body.customerId).toBe('cus_456')
+      expect(body.taxDecisionId).toBe('taxdec_1')
+      expect(body.decisionLines[0].taxLineRef).toBe('l1')
     })
 
     it('should send idempotency key', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(201, { id: 'inv_123' }))
 
       await facturino.invoices.create(
-        { customer: 'cus_1', items: [{ description: 'Test', quantity: 1, unit_price: 100, vat_rate: 2000 }] },
+        {
+          customerId: 'cus_1',
+          taxDecisionId: 'taxdec_1',
+          decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+        } as never,
         { idempotencyKey: 'idem_key_123' }
       )
 
       const [, opts] = mockFetch.mock.calls[0]
       expect(opts.headers['Idempotency-Key']).toBe('idem_key_123')
+    })
+
+    it('refuses a creation without a decision, locally', async () => {
+      await expect(facturino.invoices.create({ customerId: 'cus_1' } as never))
+        .rejects.toThrow(/'taxDecisionId' is required/)
+      expect(mockFetch).not.toHaveBeenCalled()
     })
   })
 
@@ -133,6 +140,70 @@ describe('Invoices resource', () => {
       const [url, opts] = mockFetch.mock.calls[0]
       expect(url).toContain('/v1/invoices/inv_123')
       expect(opts.method).toBe('DELETE')
+    })
+  })
+
+  describe('bindTaxDecision', () => {
+    const decidedDraft = {
+      id: 'inv_converted', object: 'invoice', status: 'draft',
+      taxSource: 'facturino', taxDecisionId: 'taxdec_1', number: null,
+    }
+
+    it('should POST /v1/invoices/:id/bind-tax-decision with the decision and its presentation', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse(200, decidedDraft))
+
+      const result = await facturino.invoices.bindTaxDecision('inv_converted', {
+        taxDecisionId: 'taxdec_1',
+        decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+      })
+
+      expect(result.taxDecisionId).toBe('taxdec_1')
+      expect(result.taxSource).toBe('facturino')
+      // Binding freezes the VAT; the invoice is issued by finalize().
+      expect(result.status).toBe('draft')
+
+      const [url, opts] = mockFetch.mock.calls[0]
+      expect(url).toContain('/v1/invoices/inv_converted/bind-tax-decision')
+      expect(opts.method).toBe('POST')
+      expect(JSON.parse(opts.body as string)).toEqual({
+        taxDecisionId: 'taxdec_1',
+        decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+      })
+    })
+
+    it('closes the quote cycle on ONE invoice — convert, decide, bind, finalize', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse(200, decidedDraft))
+      mockFetch.mockResolvedValueOnce(jsonResponse(200, {
+        ...decidedDraft, status: 'finalized', number: 'FAC-00001',
+      }))
+
+      const bound = await facturino.invoices.bindTaxDecision('inv_converted', {
+        taxDecisionId: 'taxdec_1',
+        decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+      })
+      const finalized = await facturino.invoices.finalize(bound.id)
+
+      expect(finalized.id).toBe('inv_converted')
+      expect(finalized.number).toBe('FAC-00001')
+      // Two calls, one invoice: no second document was ever created.
+      expect(mockFetch.mock.calls.map(([url]) => String(url).split('/v1')[1])).toEqual([
+        '/invoices/inv_converted/bind-tax-decision',
+        '/invoices/inv_converted/finalize',
+      ])
+    })
+
+    it('refuses locally to bind without a decision, before any round trip', async () => {
+      await expect(facturino.invoices.bindTaxDecision('inv_converted', {
+        decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+      } as never)).rejects.toThrow(/taxDecisionId/)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('refuses locally an empty presentation', async () => {
+      await expect(facturino.invoices.bindTaxDecision('inv_converted', {
+        taxDecisionId: 'taxdec_1', decisionLines: [],
+      })).rejects.toThrow(/decisionLines/)
+      expect(mockFetch).not.toHaveBeenCalled()
     })
   })
 

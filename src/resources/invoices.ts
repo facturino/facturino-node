@@ -4,6 +4,7 @@ import { Payments } from './payments.js'
 import type {
   Invoice,
   InvoiceCreateParams,
+  InvoiceBindTaxDecisionParams,
   InvoiceUpdateParams,
   InvoiceListParams,
   InvoiceRetrieveParams,
@@ -29,7 +30,31 @@ export class Invoices {
     this.payments = new Payments(client)
   }
 
+  /**
+   * Create an invoice — ALWAYS backed by a FINAL tax decision (`taxDecisionId`
+   * + `decisionLines`), whatever its fiscal source. The decided VAT, amounts
+   * and mentions are copied verbatim and frozen; `deposits` and `schedule` are
+   * settled server-side against the decided amount, inside the creation
+   * transaction. The types enforce this at compile time; the checks below turn
+   * the same misuse into an immediate local error instead of a round trip.
+   */
   async create(params: InvoiceCreateParams, options?: RequestOptions): Promise<Invoice> {
+    const runtime = params as unknown as { taxDecisionId?: unknown; decisionLines?: unknown; lines?: unknown }
+    if (typeof runtime.taxDecisionId !== 'string' || runtime.taxDecisionId.length === 0) {
+      throw new Error(
+        `'taxDecisionId' is required: every invoice is backed by a FINAL tax decision `
+          + `(facturino or integration source). Create one with taxDecisions.create() first.`,
+      )
+    }
+    if (!Array.isArray(runtime.decisionLines) || runtime.decisionLines.length === 0) {
+      throw new Error(`'decisionLines' is required: one presentation line per decision line, matched by 'taxLineRef'.`)
+    }
+    if ('lines' in runtime && runtime.lines !== undefined) {
+      throw new Error(
+        `'lines' is not part of the invoice contract: the VAT of an invoice comes from its `
+          + `tax decision. Send 'decisionLines' (presentation only).`,
+      )
+    }
     return this.client.post<Invoice>('/v1/invoices', params, options)
   }
 
@@ -56,6 +81,44 @@ export class Invoices {
   /** Soft-delete (draft only). */
   async del(id: string): Promise<void> {
     await this.client.del<void>(`/v1/invoices/${id}`)
+  }
+
+  /**
+   * Bind a FINAL tax decision to a commercial draft that already exists —
+   * typically the one `quotes.convert()` produced.
+   *
+   * This closes the quote cycle on ONE document:
+   *
+   * ```ts
+   * const { invoiceId } = await facturino.quotes.convert(quoteId)
+   * const decision = await facturino.taxDecisions.create({ ... }, { idempotencyKey })
+   * await facturino.invoices.bindTaxDecision(invoiceId, {
+   *   taxDecisionId: decision.id,
+   *   decisionLines: [{ taxLineRef: 'l1', unit: 'unit' }],
+   * })
+   * await facturino.invoices.finalize(invoiceId)
+   * ```
+   *
+   * The invoice stays a DRAFT: binding freezes the VAT, `finalize()` issues it.
+   * Idempotent on the decision — replaying the same call returns the same
+   * invoice. Binding a different decision to a bound invoice, or the same
+   * decision to a second invoice, is a conflict.
+   */
+  async bindTaxDecision(
+    id: string,
+    params: InvoiceBindTaxDecisionParams,
+    options?: RequestOptions,
+  ): Promise<Invoice> {
+    const runtime = params as unknown as { taxDecisionId?: unknown; decisionLines?: unknown }
+    if (typeof runtime.taxDecisionId !== 'string' || runtime.taxDecisionId.length === 0) {
+      throw new Error(
+        `'taxDecisionId' is required: a draft is fiscalised by binding a FINAL tax decision to it.`,
+      )
+    }
+    if (!Array.isArray(runtime.decisionLines) || runtime.decisionLines.length === 0) {
+      throw new Error(`'decisionLines' is required: one presentation line per decision line, matched by 'taxLineRef'.`)
+    }
+    return this.client.post<Invoice>(`/v1/invoices/${id}/bind-tax-decision`, params, options)
   }
 
   /** Assign number and lock. Irreversible. */

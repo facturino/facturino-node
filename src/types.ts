@@ -9,7 +9,7 @@ export interface FacturinoConfig {
   maxRetries?: number
   /** Timeout in ms (default: 30000). */
   timeout?: number
-  /** API version header (default: "2026-03-01"). */
+  /** API version header (default: "2026-09-01"). */
   apiVersion?: string
 }
 
@@ -267,7 +267,35 @@ export interface Invoice {
   id: string
   object: 'invoice'
   type: InvoiceType
+  /**
+   * One-word SUMMARY derived from the three axes below — never an authority of
+   * its own. Prefer the axes when you need to tell transmission from collection.
+   */
   status: InvoiceStatus
+  /** Documentary axis: is the invoice a draft, finalized, or cancelled? */
+  documentStatus?: DocumentStatus
+  /** Transmission axis: where the invoice stands with the platform. */
+  transmissionStatus?: TransmissionStatus
+  /** DGFiP detail inside `transmitted` / `rejected`. */
+  transmissionDetail?: TransmissionDetail
+  /** Collection axis: what has actually been paid. */
+  paymentStatus?: PaymentStatus
+  /** Fiscal source of the backing decision; `null` while a commercial draft has none. */
+  taxSource?: TaxSource | null
+  /** The decision this invoice is backed by, when it has one. */
+  taxDecisionId?: string
+  /** The frozen fiscal position, copied from the decision. */
+  taxSnapshot?: TaxSnapshot
+  /**
+   * The operation a COMMERCIAL draft states, before any decision — typically a
+   * draft produced by `quotes.convert()`. Present only while `taxSource` is
+   * `null`; it disappears the moment the invoice is bound to a decision.
+   *
+   * Read its lines to build the decision that fiscalises this draft: the line
+   * references are assigned server-side at conversion, and the decision must
+   * state exactly the operation the draft carries.
+   */
+  commercialDraft?: CommercialDraft | null
   number: string | null
   currency: Currency
   customer: CustomerRef
@@ -335,18 +363,26 @@ export interface InvoiceScheduleParam {
   label?: string
 }
 
-export interface InvoiceCreateParams {
+/** Fields every invoice creation carries alongside its decision. */
+export interface InvoiceCreateBaseParams {
   customerId: string
   type?: InvoiceType
-  lines: InvoiceLineItemParam[]
   buyer: InvoiceBuyerParam
   dates: InvoiceCreateDates
   payment: InvoicePaymentTerms
   notes?: string
   purchaseOrderNumber?: string
-  /** Deposit invoices to deduct from the amount due (CGI art. 289). Max 20. */
+  /**
+   * Fully paid deposit invoices to deduct (CGI art. 289). The decided
+   * `amountToCharge` is untouched: deposits seed `amountPaid` (BT-113) and
+   * lower `amountDue` (BT-115), settled server-side in the creation
+   * transaction. Max 20.
+   */
   deposits?: InvoiceDepositParam[]
-  /** Payment schedule (2 to 12 instalments) summing to the total. */
+  /**
+   * Payment schedule (2 to 12 instalments). It must distribute EXACTLY the
+   * decided amount due — it never modifies the total.
+   */
   schedule?: InvoiceScheduleParam[]
   metadata?: Record<string, unknown>
   /** Finalize the invoice in the same call (assigns its number). */
@@ -358,6 +394,36 @@ export interface InvoiceCreateParams {
   autoSend?: { email?: boolean; pa?: boolean }
 }
 
+/**
+ * Creating an invoice — ALWAYS backed by a FINAL tax decision, whatever its
+ * fiscal source (`facturino` or `integration`). The decided VAT, amounts and
+ * legal mentions are copied verbatim and frozen; `decisionLines` carries
+ * presentation only (unit, catalogue product), matched by `taxLineRef`. A
+ * final decision backs exactly ONE invoice.
+ */
+export interface InvoiceCreateParams extends InvoiceCreateBaseParams {
+  taxDecisionId: string
+  decisionLines: DecisionBackedLineParam[]
+}
+
+/**
+ * Binding a FINAL decision to a commercial draft that already exists — the
+ * draft produced by converting a quote.
+ *
+ * The same two fields the direct creation carries, and only those: the decision
+ * states the whole fiscal content, and the draft already states the buyer, the
+ * dates and the payment terms.
+ */
+export interface InvoiceBindTaxDecisionParams {
+  taxDecisionId: string
+  decisionLines: DecisionBackedLineParam[]
+}
+
+/**
+ * A COMMERCIAL line with an indicative VAT — used by quotes only. A quote is a
+ * commercial document; converting it to an invoice goes through a tax decision,
+ * which re-decides (or re-validates) the VAT.
+ */
 export interface InvoiceLineItemParam {
   description: string
   quantity: string
@@ -372,17 +438,16 @@ export interface InvoiceLineItemParam {
   product?: string | null
 }
 
+/**
+ * Patching a draft. The fiscal content (lines, buyer, deposits, schedule) is
+ * frozen by the decision: only non-fiscal fields are patchable, and `dates` is
+ * restricted to the due date server-side.
+ */
 export interface InvoiceUpdateParams {
-  buyer?: InvoiceBuyerParam
-  lines?: InvoiceLineItemParam[]
   dates?: Partial<InvoiceCreateDates>
   payment?: Partial<InvoicePaymentTerms>
   notes?: string
   purchaseOrderNumber?: string
-  /** Replace the linked deposit invoices; an empty array unlinks them. */
-  deposits?: InvoiceDepositParam[]
-  /** Replace the payment schedule. */
-  schedule?: InvoiceScheduleParam[]
   metadata?: Record<string, unknown>
 }
 
@@ -769,7 +834,26 @@ export interface CreditNote {
   object: 'credit_note'
   customer: CustomerRef
   relatedInvoiceId: string
+  /**
+   * One-word SUMMARY derived from the three axes below — never an authority of
+   * its own. Prefer the axes when you need to tell transmission from collection.
+   */
   status: CreditNoteStatus
+  /** Documentary axis. */
+  documentStatus?: DocumentStatus
+  /** Transmission axis. */
+  transmissionStatus?: TransmissionStatus
+  transmissionDetail?: TransmissionDetail
+  /** Collection axis — a credit note follows the refund, not the invoice. */
+  paymentStatus?: PaymentStatus
+  /** Where this credit note's VAT comes from. */
+  taxSource?: TaxSource
+  /** The invoice this credit note credits. */
+  originalInvoiceId?: string
+  /** The decision the credited invoice was backed by; the credit note inherits it. */
+  originalTaxDecisionId?: string
+  /** The frozen fiscal position, inherited from the credited invoice. */
+  taxSnapshot?: TaxSnapshot
   creditNoteType: CreditNoteType
   number: string | null
   currency: Currency
@@ -787,20 +871,49 @@ export interface CreditNote {
   updated: string
 }
 
-export interface CreditNoteCreateParams {
-  customerId: string
+/**
+ * One credited line of a decision-backed invoice.
+ *
+ * State EITHER a `quantity` or an `amountTTC`, never both: they are two ways of
+ * saying how much of the line is credited, and stating both would state two
+ * different amounts. Omit both to credit the whole remaining balance of the line.
+ */
+export interface CreditedLineParam {
+  /** Reference of the decided line being credited. */
+  taxLineRef: string
+  /** Credited quantity, as a decimal string. Mutually exclusive with `amountTTC`. */
+  quantity?: string
+  /** Credited amount in integer cents. Mutually exclusive with `quantity`. */
+  amountTTC?: number
+}
+
+/** Fields every credit-note creation carries. */
+export interface CreditNoteCreateBaseParams {
+  customerId?: string
   relatedInvoiceId: string
   creditNoteType: CreditNoteType
   reasonCode: CreditNoteReasonCode
   reason?: string
-  items: InvoiceLineItemParam[]
   dates?: { issued: string }
   notes?: string
   metadata?: Record<string, unknown>
 }
 
+/**
+ * Crediting an invoice.
+ *
+ * A credit note inherits the fiscal position of the invoice it corrects —
+ * source, snapshot and lines. The rate, the category, the VATEX code and the
+ * legal mention come from the frozen snapshot; `creditedLines` states WHICH
+ * original lines are credited and how much of each, nothing more.
+ */
+export interface CreditNoteCreateParams extends CreditNoteCreateBaseParams {
+  creditedLines: CreditedLineParam[]
+}
+
+/** Updating a draft credit note. */
 export interface CreditNoteUpdateParams {
-  items?: InvoiceLineItemParam[]
+  creditedLines?: CreditedLineParam[]
   reason?: string
   notes?: string
   metadata?: Record<string, unknown>
@@ -953,6 +1066,33 @@ export interface RecurringInvoice {
   updated: string
 }
 
+/**
+ * A commercial line of a decision-backed recurrence.
+ *
+ * It carries its own presentation because a recurrence stores no decision: each
+ * occurrence is decided on ITS OWN effective date, so a stored decision would
+ * apply last quarter's rules to this quarter's invoice.
+ */
+export interface RecurringTaxLineParam extends TaxDecisionLineParam {
+  unit: Unit
+  product?: string | null
+}
+
+/** Integration line of a recurrence: supplied VAT, re-validated at EVERY occurrence. */
+export interface RecurringIntegrationTaxLineParam extends IntegrationTaxDecisionLineParam {
+  unit: Unit
+  product?: string | null
+}
+
+/**
+ * Fiscal inputs of the per-occurrence decisions. The recurrence keeps ONE
+ * fiscal source for its whole life; each occurrence takes a NEW decision under
+ * it, on its own effective date.
+ */
+export type RecurringTaxInputsParam =
+  | { taxSource: 'facturino'; priceMode: PriceMode; lines: RecurringTaxLineParam[] }
+  | { taxSource: 'integration'; priceMode: PriceMode; lines: RecurringIntegrationTaxLineParam[] }
+
 export interface RecurringInvoiceCreateParams {
   customerId: string
   frequency: RecurringFrequency
@@ -960,8 +1100,13 @@ export interface RecurringInvoiceCreateParams {
   nextGenerationDate: string
   endDate?: string
   customIntervalDays?: number
+  /**
+   * Commercial inputs of the per-occurrence decisions. Required: an
+   * occurrence that cannot be decided generates no invoice.
+   */
+  taxInputs: RecurringTaxInputsParam
+  /** Presentation and terms of the generated invoices — never a line. */
   templateInvoice: {
-    items: InvoiceLineItemParam[]
     notes?: string
     paymentMethod?: PaymentMethod
     paymentTermsDays?: number
@@ -971,12 +1116,13 @@ export interface RecurringInvoiceCreateParams {
 }
 
 export interface RecurringInvoiceUpdateParams {
+  /** Replaces the fiscal inputs (same fiscal source for the recurrence's life). */
+  taxInputs?: RecurringTaxInputsParam
   frequency?: RecurringFrequency
   nextGenerationDate?: string
   endDate?: string
   customIntervalDays?: number
   templateInvoice?: {
-    items?: InvoiceLineItemParam[]
     notes?: string
     paymentMethod?: PaymentMethod
     paymentTermsDays?: number
@@ -1381,7 +1527,7 @@ export interface BillingSubscription {
   cancelAtPeriodEnd: boolean
 }
 
-/** Subscription (platform) invoice issued by INTEK CENTER to the Facturino account. */
+/** Subscription (platform) invoice issued to this account. */
 export interface PlatformInvoice {
   object: 'platform_invoice'
   id: string
@@ -1514,4 +1660,440 @@ export interface HealthStatus {
   version: string
   region: string
   timestamp: string
+}
+
+// ---------------------------------------------------------------------------
+// Tax decisions
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the amounts you send include VAT.
+ *
+ * `tax_exclusive`: VAT is added to your unit amounts.
+ * `tax_inclusive`: VAT is extracted from them.
+ */
+export type PriceMode = 'tax_exclusive' | 'tax_inclusive'
+
+/**
+ * Fiscal nature of a line.
+ *
+ * `electronically_supplied_services` carries its own place-of-supply rules and
+ * is not the same as an ordinary service. `deposit` and `ancillary_costs`
+ * follow the principal supply, which they must name via `relatedCategory`.
+ */
+/**
+ * One line of a commercial draft: the operation as stated, with NO VAT.
+ *
+ * `unitPrice` is in integer cents, in the draft's `priceMode`; `quantity` is a
+ * decimal string. `rateCategory` is the band the seller asks for — the decision
+ * concludes the actual rate.
+ */
+export interface CommercialDraftLine {
+  /** Stable reference, assigned server-side; the decision reuses it. */
+  reference: string
+  description: string
+  quantity: string
+  unit: Unit
+  unitPrice: number
+  supplyCategory: SupplyCategory
+  rateCategory: RateCategory
+  discount?: TaxDecisionDiscount
+  product?: string | null
+}
+
+/**
+ * The operation an undecided draft states. Its total is COMMERCIAL: neither a
+ * decided net nor a decided gross amount, because nothing has been decided yet.
+ */
+export interface CommercialDraft {
+  priceMode: PriceMode
+  lines: CommercialDraftLine[]
+  totalCents: number
+}
+
+export type SupplyCategory =
+  | 'goods'
+  | 'services'
+  | 'electronically_supplied_services'
+  | 'deposit'
+  | 'ancillary_costs'
+
+/** Principal supply a deposit or an ancillary cost follows. */
+export type PrimarySupplyCategory = 'goods' | 'services' | 'electronically_supplied_services'
+
+/** Rate band requested. The engine decides whether it actually applies. */
+export type RateCategory = 'standard' | 'intermediate' | 'reduced' | 'super_reduced' | 'specific'
+
+/** Where the goods physically go. Relevant to cross-border supplies of goods. */
+export type GoodsMovement =
+  | 'stays_in_seller_territory'
+  | 'dispatched_to_buyer_territory'
+  | 'unknown'
+
+/**
+ * Only `final` carries amounts.
+ *
+ * On any other status `totals` and `amountToCharge` are `null`, never `0`:
+ * absent is not "nothing to charge".
+ */
+export type TaxDecisionStatus = 'final' | 'pending_verification' | 'unsupported'
+
+/** Explicit discount. `percent` in centi-percent (2500 = 25.00 %), `amount` in integer cents. */
+export interface TaxDecisionDiscount {
+  type: 'percent' | 'amount'
+  value: number
+}
+
+export interface TaxDecisionLineParam {
+  /** Stable caller-side reference, echoed on the decided line. */
+  reference: string
+  description: string
+  category: SupplyCategory
+  /** Required when `category` is `deposit` or `ancillary_costs`. */
+  relatedCategory?: PrimarySupplyCategory
+  rateCategory: RateCategory
+  /** Only `general` is implemented; anything else is reported as unsupported. */
+  placeOfSupplyRule?: string
+  goodsMovement?: GoodsMovement
+  /** Unit amount in integer cents, in the request's `priceMode`. */
+  unitAmount: number
+  /** Decimal quantity sent as a STRING, never a float. Up to 6 decimals. */
+  quantity: string
+  discount?: TaxDecisionDiscount
+}
+
+/** Kind of location signal (Implementing Regulation (EU) 282/2011). */
+export type LocationEvidenceKind =
+  | 'billing_address'
+  | 'ip_geolocation'
+  | 'bank_details'
+  | 'sim_mobile_country'
+  | 'fixed_line'
+  | 'other_commercial'
+
+/** Who supplied the signal. */
+export type EvidenceSource = 'psp' | 'network' | 'bank' | 'declared' | 'other'
+
+/**
+ * One piece of location evidence.
+ *
+ * Send the territorial SIGNAL, never the raw one: a country — and a postal code
+ * where the territory needs one — not an IP address, a PSP payload or bank
+ * account details. `reference` is a bounded opaque identifier (a PSP charge id,
+ * a geolocation batch id), not the signal itself.
+ */
+export interface LocationEvidenceParam {
+  kind: LocationEvidenceKind
+  /** ISO 3166-1 alpha-2. */
+  country: string
+  postalCode?: string
+  /** Is the evidence from a party independent of both seller and buyer? */
+  thirdParty: boolean
+  source: EvidenceSource
+  /** Civil date `YYYY-MM-DD`. */
+  collectedAt: string
+  reference?: string
+}
+
+/** Non-EU business-status evidence (282/2011 art. 18-3). */
+export interface NonEuBusinessEvidenceParam {
+  kind: 'tax_authority_certificate' | 'vat_or_similar_number' | 'other_commercial_evidence'
+  reference: string
+  /** ISO 3166-1 alpha-2. */
+  issuedByCountry: string
+  issuedByPostalCode?: string
+  reasonableVerificationPerformed: boolean
+  collectedAt: string
+}
+
+interface TaxDecisionCreateBaseParams {
+  customerId: string
+  /** Civil date `YYYY-MM-DD`. A timestamp is refused: the timezone call is yours. */
+  effectiveAt: string
+  /** `eur` only in this ruleset. Any other currency is refused, never converted. */
+  currency: string
+  priceMode: PriceMode
+  locationEvidence?: LocationEvidenceParam[]
+  nonEuBusinessEvidence?: NonEuBusinessEvidenceParam
+  /**
+   * Previous decision this one retries after supplying the missing facts. The
+   * commercial operation must be identical; only the evidence may change.
+   */
+  retryOfTaxDecisionId?: string
+}
+
+/**
+ * `taxSource: 'facturino'` — the VAT is DETERMINED by Facturino. You describe
+ * the operation; the rate, the category, the VATEX code, the legal mentions,
+ * the amounts and the three reporting axes are decided server-side.
+ */
+export interface FacturinoTaxDecisionCreateParams extends TaxDecisionCreateBaseParams {
+  taxSource: 'facturino'
+  lines: TaxDecisionLineParam[]
+}
+
+/**
+ * Line of an INTEGRATION decision: the same commercial data plus the VAT your
+ * own engine concluded. Facturino validates the coherence of rate/category/
+ * VATEX and refuses any detectable contradiction (`integration_vat_incoherent`)
+ * — it never silently corrects a supplied rate.
+ */
+export interface IntegrationTaxDecisionLineParam {
+  /** Stable caller-side reference, echoed on the decided line. */
+  reference: string
+  description: string
+  category: SupplyCategory
+  /** Required when `category` is `deposit` or `ancillary_costs`. */
+  relatedCategory?: PrimarySupplyCategory
+  /** Unit amount in integer cents, in the request's `priceMode`. */
+  unitAmount: number
+  /** Decimal quantity sent as a STRING, never a float. Up to 6 decimals. */
+  quantity: string
+  discount?: TaxDecisionDiscount
+  /** Supplied VAT rate in centipercent (2000 = 20.00 %). Never corrected. */
+  vatRate: number
+  /** Supplied EN 16931 category code (BT-151). */
+  vatCode: VatCode
+  /** VATEX code (BT-121). Required for E/AE/K/G/O; refused for S/Z. */
+  vatexCode?: string
+  /** Declared place of supply (canonical territory id, e.g. `FR-MET`, `DE`). */
+  placeOfSupply?: string
+}
+
+/**
+ * `taxSource: 'integration'` — the VAT is SUPPLIED by the integration and
+ * validated for coherence. The amounts, the legal mentions and the three
+ * reporting axes are still decided server-side, by the same engines.
+ */
+export interface IntegrationTaxDecisionCreateParams extends TaxDecisionCreateBaseParams {
+  taxSource: 'integration'
+  lines: IntegrationTaxDecisionLineParam[]
+}
+
+/** The two fiscal journeys of the stable contract — `taxSource` is required. */
+export type TaxDecisionCreateParams =
+  | FacturinoTaxDecisionCreateParams
+  | IntegrationTaxDecisionCreateParams
+
+/** VIES consultation outcome. The status is kept, never the raw response. */
+export interface ViesResult {
+  status: 'valid' | 'invalid' | 'unavailable' | 'invalid_format'
+  checkedAt: string | null
+  normalizedVatNumber: string | null
+  source: 'vies'
+  returnedName: string | null
+  consultationNumber: string | null
+}
+
+/** Normalized territorial evidence kept with the decision. No raw signal is exposed. */
+export interface LocationEvidenceResult {
+  kind: LocationEvidenceKind
+  territoryId: string
+  declaredCountry: string
+  declaredPostalCode: string | null
+  thirdParty: boolean
+  source: EvidenceSource
+  collectedAt: string
+  reference: string | null
+}
+
+export interface NonEuBusinessEvidenceResult {
+  kind: 'tax_authority_certificate' | 'vat_or_similar_number' | 'other_commercial_evidence'
+  reference: string
+  issuedByTerritoryId: string
+  reasonableVerificationPerformed: boolean
+  collectedAt: string
+}
+
+/** One decided line. Amounts in integer cents. */
+export interface TaxDecisionLine {
+  reference: string
+  description: string
+  category: SupplyCategory
+  relatedCategory: PrimarySupplyCategory | null
+  effectiveCategory: string | null
+  quantity: string
+  unitAmount: number
+  discount: TaxDecisionDiscount | null
+  /** Requested rate band. `null` on an integration line: the exact rate was supplied. */
+  rateCategory: RateCategory | null
+  placeOfSupplyRule: string | null
+  goodsMovement: GoodsMovement | null
+  treatment: string | null
+  vatCategoryCode: string | null
+  vatexCode: string | null
+  legalMention: string | null
+  rateCentipercent: number | null
+  rateBasis: string | null
+  placeOfSupply: string | null
+  placeOfSupplyReference: string | null
+  treatmentReference: string | null
+  amountHT: number | null
+  amountVAT: number | null
+  amountTTC: number | null
+  invoiceChannel: InvoiceChannel | null
+  transactionReporting: TransactionReporting | null
+  paymentReporting: PaymentReporting | null
+}
+
+/** Whether the invoice travels the e-invoicing network. */
+export type InvoiceChannel = 'einvoicing' | 'none'
+/** Whether the transaction itself must be reported. */
+export type TransactionReporting = 'ereporting' | 'none' | 'outside_scope'
+/** Whether and how the collection must be reported. */
+export type PaymentReporting = 'fr212' | 'ereporting' | 'none'
+
+/** Buyer identity and qualification, frozen when the decision was taken. */
+export interface TaxDecisionCustomer {
+  customerId: string
+  name: string
+  nature: 'business' | 'consumer'
+  natureBasis: string
+  territoryId: string
+  territoryKind: string
+  declaredCountry: string
+  declaredPostalCode: string | null
+  legalRegistrationId: string | null
+  vatNumber: string | null
+  crossBorderTaxableStatus: string
+  businessStatusBasis: string
+}
+
+/** Why an axis carries the obligation it does. */
+export interface TaxDecisionObligationReason {
+  axis: 'invoiceChannel' | 'transactionReporting' | 'paymentReporting'
+  code: string
+  reference: string
+  message: string
+}
+
+/** What is missing, on a decision that is not final. */
+export interface TaxDecisionIssue {
+  code: string
+  message: string
+}
+
+export interface TaxDecisionVatBreakdownEntry {
+  rateCentipercent: number
+  categoryCode: string
+  vatexCode: string | null
+  base: number
+  amount: number
+}
+
+/**
+ * An immutable fiscal position.
+ *
+ * It fixes the VAT, the exact amount to charge and the three reporting axes for
+ * ONE commercial operation, then never changes. A decision is never modified or
+ * deleted — request a new one, optionally with `retryOfTaxDecisionId`.
+ */
+export interface TaxDecision {
+  id: string
+  object: 'tax_decision'
+  companyId: string
+  /** Fiscal source of the decision — `facturino` or `integration`. */
+  taxSource: TaxSource
+  status: TaxDecisionStatus
+  customerId: string
+  customer: TaxDecisionCustomer
+  sellerProfileId: string
+  sellerProfileRevision: number
+  sellerProfile: Record<string, unknown>
+  currency: string
+  priceMode: PriceMode
+  effectiveAt: string
+  decidedAt: string
+  /** Past this instant the decision may no longer open a payment. It stays readable. */
+  expiresAt: string
+  checkoutValidityPolicy: 'checkout-validity-v1'
+  /** Derived from the server clock at read time, never stored. */
+  expired: boolean
+  rulesVersion: string
+  reportingCalendar: string
+  roundingPolicy: string
+  /** SHA-256 of the canonical request. Never the raw idempotency key. */
+  requestFingerprint: string
+  /** SHA-256 of the commercial operation, used to control retries. */
+  operationFingerprint: string
+  lines: TaxDecisionLine[]
+  /** `null` on any status other than `final`. */
+  totals: { totalHT: number; totalVAT: number; totalTTC: number } | null
+  vatBreakdown: TaxDecisionVatBreakdownEntry[]
+  /** Exact amount to charge, in integer cents. `null` unless the decision is final. */
+  amountToCharge: number | null
+  invoiceChannel: InvoiceChannel | null
+  transactionReporting: TransactionReporting | null
+  paymentReporting: PaymentReporting | null
+  /**
+   * A foreign tax may apply. Facturino decides French VAT and the matching
+   * French obligations; this case must be reviewed outside Facturino.
+   */
+  foreignTaxReviewRequired: boolean
+  vies: ViesResult | null
+  locationEvidence: LocationEvidenceResult[]
+  nonEuBusinessEvidence: NonEuBusinessEvidenceResult | null
+  issues: TaxDecisionIssue[]
+  obligationReasons: TaxDecisionObligationReason[]
+  retryOfTaxDecisionId: string | null
+  livemode: boolean
+  created: string
+  updated: string
+}
+
+// ---------------------------------------------------------------------------
+// Documents backed by a decision
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a document's VAT comes from — the two equal journeys of the stable
+ * contract. `facturino`: the VAT was determined by the Facturino engines.
+ * `integration`: the VAT was supplied by the integration and validated for
+ * coherence — never silently corrected. A commercial draft created from the
+ * app reads `taxSource: null` until its decision is taken.
+ */
+export type TaxSource = 'facturino' | 'integration'
+
+/** Documentary axis. */
+export type DocumentStatus = 'draft' | 'finalized' | 'cancelled'
+/** Transmission axis. A collection never moves it. */
+export type TransmissionStatus =
+  | 'not_applicable' | 'pending' | 'sending' | 'deposited'
+  | 'transmitted' | 'approved' | 'rejected'
+/** DGFiP detail inside `transmitted` / `rejected`. */
+export type TransmissionDetail = 'available' | 'received' | 'suspended' | 'refused' | null
+/** Collection axis. A refund does not erase the collection that happened. */
+export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid' | 'partially_refunded' | 'refunded'
+
+/**
+ * A presentation-only line of a decision-backed document.
+ *
+ * It carries no VAT: the rate, the category, the VATEX code and the legal
+ * mention all come from the decision line it references.
+ */
+export interface DecisionBackedLineParam {
+  /** Reference of the decided line this document line renders. */
+  taxLineRef: string
+  unit: Unit
+  product?: string | null
+}
+
+/** The frozen fiscal position copied onto a document. */
+export interface TaxSnapshot {
+  taxDecisionId: string
+  /** Fiscal source of the decision, frozen with it. */
+  taxSource?: TaxSource
+  priceMode: PriceMode
+  currency: string
+  rulesVersion?: string
+  reportingCalendar?: string
+  effectiveAt?: string
+  invoiceChannel?: InvoiceChannel | null
+  transactionReporting?: TransactionReporting | null
+  paymentReporting?: PaymentReporting | null
+  amountToChargeCents?: number
+  legalMentions?: string[]
+  lines?: Array<Record<string, unknown>>
+  totals?: Record<string, number>
+  vatBreakdown?: Array<Record<string, unknown>>
 }

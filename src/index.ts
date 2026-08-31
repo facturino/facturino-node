@@ -18,6 +18,7 @@ import { ReceivedInvoices } from './resources/received-invoices.js'
 import { Reporting } from './resources/reporting.js'
 import { AccountResource } from './resources/account.js'
 import { Billing } from './resources/billing.js'
+import { TaxDecisions } from './resources/taxDecisions.js'
 import { Usage } from './resources/usage.js'
 import { Validate } from './resources/validate.js'
 import { Reference } from './resources/reference.js'
@@ -44,6 +45,7 @@ class Facturino {
   readonly jobs: Jobs
   readonly reference: Reference
   readonly sandbox: Sandbox
+  readonly taxDecisions: TaxDecisions
   readonly usage: Usage
   readonly validate: Validate
   readonly webhooks: Webhooks
@@ -72,6 +74,7 @@ class Facturino {
     this.jobs = new Jobs(client)
     this.reference = new Reference(client)
     this.sandbox = new Sandbox(client)
+    this.taxDecisions = new TaxDecisions(client)
     this.usage = new Usage(client)
     this.validate = new Validate(client)
     this.webhooks = new Webhooks()
@@ -120,6 +123,9 @@ export type {
   InvoiceBuyerParam,
   InvoiceCreateDates,
   InvoiceCreateParams,
+  InvoiceBindTaxDecisionParams,
+  CommercialDraft,
+  CommercialDraftLine,
   InvoiceLineItemParam,
   InvoiceUpdateParams,
   InvoiceListParams,
@@ -215,6 +221,48 @@ export type {
   // Validate
   ValidateParams,
   ValidateResponse,
+  // Tax decisions
+  PriceMode,
+  SupplyCategory,
+  PrimarySupplyCategory,
+  RateCategory,
+  GoodsMovement,
+  TaxDecisionStatus,
+  TaxDecisionDiscount,
+  TaxDecisionLineParam,
+  TaxDecisionCreateParams,
+  TaxDecision,
+  TaxDecisionLine,
+  TaxDecisionCustomer,
+  TaxDecisionIssue,
+  TaxDecisionObligationReason,
+  TaxDecisionVatBreakdownEntry,
+  LocationEvidenceKind,
+  LocationEvidenceParam,
+  LocationEvidenceResult,
+  NonEuBusinessEvidenceParam,
+  NonEuBusinessEvidenceResult,
+  EvidenceSource,
+  ViesResult,
+  InvoiceChannel,
+  TransactionReporting,
+  PaymentReporting,
+  // Decision-backed documents
+  TaxSource,
+  TaxSnapshot,
+  DocumentStatus,
+  TransmissionStatus,
+  TransmissionDetail,
+  PaymentStatus,
+  DecisionBackedLineParam,
+  InvoiceCreateBaseParams,
+  CreditedLineParam,
+  RecurringTaxLineParam,
+  RecurringIntegrationTaxLineParam,
+  RecurringTaxInputsParam,
+  FacturinoTaxDecisionCreateParams,
+  IntegrationTaxDecisionCreateParams,
+  IntegrationTaxDecisionLineParam,
   // Reference
   LegalForm,
   NafCode,
