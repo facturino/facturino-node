@@ -1845,6 +1845,15 @@ export interface IntegrationTaxDecisionLineParam {
   category: SupplyCategory
   /** Required when `category` is `deposit` or `ancillary_costs`. */
   relatedCategory?: PrimarySupplyCategory
+  /**
+   * Physical movement of the goods.
+   *
+   * Required as soon as the buyer is a consumer established in another member
+   * state: that movement decides whether the intra-EU distance-sale rule applies
+   * (Directive 2006/112/CE art. 33, a), and it is never assumed. Irrelevant on a
+   * service.
+   */
+  goodsMovement?: GoodsMovement
   /** Unit amount in integer cents, in the request's `priceMode`. */
   unitAmount: number
   /** Decimal quantity sent as a STRING, never a float. Up to 6 decimals. */
@@ -1856,7 +1865,15 @@ export interface IntegrationTaxDecisionLineParam {
   vatCode: VatCode
   /** VATEX code (BT-121). Required for E/AE/K/G/O; refused for S/Z. */
   vatexCode?: string
-  /** Declared place of supply (canonical territory id, e.g. `FR-MET`, `DE`). */
+  /**
+   * Declared place of supply (canonical territory id, e.g. `FR-MET`, `DE`).
+   *
+   * Required as soon as the buyer is established in a French overseas
+   * collectivity or the TAAF (`PM`, `BL`, `MF`, `PF`, `NC`, `WF`, `TF`): the
+   * place is what says whether the local tax of that collectivity is at stake,
+   * and it is never assumed. A place located in one of those seven makes the
+   * decision non-final, except the sourced New Caledonian B2B case.
+   */
   placeOfSupply?: string
 }
 
@@ -1931,6 +1948,443 @@ export interface TaxDecisionLine {
   amountHT: number | null
   amountVAT: number | null
   amountTTC: number | null
+  invoiceChannel: InvoiceChannel | null
+  transactionReporting: TransactionReporting | null
+  paymentReporting: PaymentReporting | null
+}
+
+/** How much of the seller's covered activity Facturino actually sees. */
+export type EuThresholdCoverageMode = 'facturino_only' | 'mixed_channels'
+
+/**
+ * The slice of the ANNUAL LEDGER this decision took, frozen with it.
+ *
+ * The running total is not a photograph left on the fiscal profile: it is a
+ * transactional ledger per company, per mode and per year, and the decision
+ * freezes the slice it occupied there — which ledger, at which version, at which
+ * position in the total order of movements.
+ */
+export interface TaxDecisionThresholdTrace {
+  /**
+   * Which fact settled the question. On `previous_year` the previous calendar
+   * year closes it on its own, and the running total is reported without
+   * deciding anything.
+   */
+  decidedOn: 'previous_year' | 'ledger_cumulative'
+  /** Cap of art. 59 quater §1, in integer cents. */
+  capCents: number
+  /** Ledger the figures come from (`2026_live`, `2026_test`). */
+  stateId: string
+  year: string
+  /** Ledger version the slice was taken at. */
+  stateVersion: number
+  /** Position of the operation in the ledger's total order. */
+  sequence: number
+  /** Reservation the slice was held under — the decision's idempotency claim. */
+  reservationId: string
+  coverageMode: EuThresholdCoverageMode
+  previousYearAmountCents: number
+  currentYearOpeningCents: number
+  openingDeclaredAt: string
+  /** Day the channels other than Facturino are declared complete through. */
+  externalCompleteThroughDate: string
+  adjustmentTotalCents: number
+  adjustmentCount: number
+  /** Total that CERTAINLY precedes the operation: settled movements only. */
+  cumulativeBeforeMinCents: number
+  /**
+   * The same total plus every slice held by an operation being decided at the
+   * same moment. The gap between the two bounds IS that concurrency, and a
+   * verdict is frozen only when it holds at both — which is what makes it
+   * immune to the abandonment of any of those operations.
+   */
+  cumulativeBeforeMaxCents: number
+  /** How many concurrent operations the upper bound accounts for. */
+  pendingPredecessorCount: number
+  /**
+   * Value the operation adds to the running total. Under a tax-inclusive price
+   * the VAT-exclusive value depends on the rate the threshold has to decide, so
+   * it is an interval; under a tax-exclusive price both bounds coincide.
+   */
+  operationValueMinCents: number
+  operationValueMaxCents: number
+  cumulativeAfterMinCents: number
+  cumulativeAfterMaxCents: number
+}
+
+/** Why an amount already counted is taken back out of the running total. */
+export type EuThresholdCorrectionKind = 'credit_note' | 'cancellation' | 'refund'
+
+/** One movement of the ledger. Written once, never rewritten. */
+export interface EuThresholdLedgerEntry {
+  /**
+   * Deterministic, path-safe id derived from the movement. Your own `reference`
+   * is DATA, never an identifier.
+   */
+  id: string
+  sequence: number
+  kind:
+    | 'opening'
+    | 'external_adjustment'
+    | 'external_correction'
+    | 'reservation_consumed'
+    | 'reservation_released'
+    | 'review_opened'
+    | 'review_resolved'
+  /** Signed effect on the running total: negative for a qualified correction. */
+  amountMin: number
+  amountMax: number
+  /** The same effect, in the art. 24 ter services perimeter. Independent. */
+  evidenceAmountMin: number
+  evidenceAmountMax: number
+  cumulativeMin: number
+  cumulativeMax: number
+  evidenceCumulativeMin: number
+  evidenceCumulativeMax: number
+  taxDecisionId: string | null
+  effectiveAt: string | null
+  /** Your own reference, kept verbatim. */
+  reference: string | null
+  correction: {
+    kind: EuThresholdCorrectionKind
+    correctsEntryId: string
+    relatedResourceType: string
+    relatedResourceId: string
+    evidenceReference: string
+  } | null
+  reason: string
+  recordedAt: string
+  /** Did this movement bring turnover in, and therefore have anything to give back? */
+  correctable: boolean
+  /** What it has ALREADY given back, over every correction that named it. */
+  correctedMin: number
+  correctedEvidenceMin: number
+  correctionCount: number
+  /**
+   * What is LEFT to give back on it. A movement gives back what it brought in,
+   * ONCE, whatever the number of corrections: the balance is kept inside the
+   * transaction, and a correction beyond it answers
+   * `eu_threshold_correction_exceeds_counted`.
+   */
+  remainingMin: number
+  remainingEvidenceMin: number
+}
+
+/** One page of movements, newest first. */
+export interface EuThresholdLedgerEntryList {
+  object: 'list'
+  url: string
+  data: EuThresholdLedgerEntry[]
+  has_more: boolean
+  next_cursor: string | null
+}
+
+/**
+ * A slice held by a decision in flight.
+ *
+ * It is NOT acquired: it may still be given back, and it is published apart
+ * from the acquired total for exactly that reason.
+ */
+export interface EuThresholdReservation {
+  id: string
+  sequence: number
+  effectiveAt: string
+  contributionMin: number
+  contributionMax: number
+  evidenceContributionMin: number
+  evidenceContributionMax: number
+  reservedAt: string
+  expiresAt: string
+}
+
+/** Why the ledger stopped serving decisions. */
+export type EuThresholdReviewCode =
+  | 'consumed_slice_missing'
+  | 'correction_not_qualifiable'
+  | 'declared_by_administrator'
+
+/**
+ * The annual ledger of the two EU B2C thresholds.
+ *
+ * It carries TWO counters, strictly apart: the common EUR 10,000 threshold
+ * (art. 59 quater §1 — intra-EU distance sales of goods AND cross-border
+ * services to consumers) and the EUR 100,000 location-evidence threshold
+ * (Reg. 282/2011 art. 24 ter, 2nd subparagraph — electronically supplied
+ * services only). A distance sale of goods raises the first and never the
+ * second.
+ */
+export interface EuThresholdLedger {
+  object: 'eu_threshold_ledger'
+  id: string
+  companyId: string
+  livemode: boolean
+  year: string
+  version: number
+  /**
+   * `review_required` blocks every new reservation: the running total is known
+   * to be wrong, and a decision is frozen on the figures it reads.
+   */
+  status: 'open' | 'review_required'
+  review: { code: EuThresholdReviewCode; detail: string; openedAt: string } | null
+  capCents: number
+  evidenceCapCents: number
+  opening: {
+    previousYearAmount: number
+    currentYearOpening: number
+    previousYearEvidenceAmount: number
+    currentYearEvidenceOpening: number
+    coverageMode: EuThresholdCoverageMode
+    externalCompleteThroughDate: string
+    /** ISO instant the opening was actually declared. */
+    declaredAt: string
+  }
+  externalCompleteThroughDate: string
+  adjustmentTotal: number
+  adjustmentEvidenceTotal: number
+  adjustmentCount: number
+  /** Total of the qualified corrections, POSITIVE and subtracted. */
+  correctionTotal: number
+  correctionEvidenceTotal: number
+  correctionCount: number
+  /** Total already ACQUIRED: opening + adjustments − corrections + final decisions. */
+  acquiredMin: number
+  acquiredMax: number
+  acquiredEvidenceMin: number
+  acquiredEvidenceMax: number
+  /**
+   * Slices held right now by operations being decided. NOT acquired, and never
+   * summed with the figures above: they may still disappear.
+   */
+  reservedMin: number
+  reservedMax: number
+  reservedEvidenceMin: number
+  reservedEvidenceMax: number
+  /** What is left before each cap, on the figures already acquired. */
+  remainingMin: number
+  evidenceRemainingMin: number
+  settledCount: number
+  lastConsumedEffectiveAt: string | null
+  reservations: EuThresholdReservation[]
+  /** First page of movements, newest first. */
+  entries: EuThresholdLedgerEntry[]
+  entriesHasMore: boolean
+  entriesNextCursor: string | null
+  created: string
+  updated: string
+}
+
+export interface OpenEuThresholdLedgerParams {
+  year: string
+  /** Covered supplies of the PREVIOUS calendar year, VAT excluded, in cents. */
+  previousYearAmount: number
+  /** Covered supplies ALREADY made this year, VAT excluded, in cents. */
+  currentYearOpening: number
+  /**
+   * Electronically supplied services to consumers of the Union over the same
+   * period, DOMESTIC ones included — the perimeter of the EUR 100,000 art. 24b
+   * location-evidence threshold. INDEPENDENT of `previousYearAmount` in both
+   * directions: the common threshold counts only cross-border supplies, so this
+   * figure can legitimately be larger.
+   */
+  previousYearEvidenceAmount: number
+  /** Same perimeter for the current year, independent of `currentYearOpening`. */
+  currentYearEvidenceOpening: number
+  coverageMode: EuThresholdCoverageMode
+  /**
+   * Day the channels other than Facturino are complete through. It must belong
+   * to the ledger's own year and never be in the future.
+   */
+  externalCompleteThroughDate: string
+}
+
+export interface EuThresholdAdjustmentParams {
+  /**
+   * Your own identifier: it is the entry's identity, so replaying the SAME body
+   * adds nothing and reusing it for a different one answers
+   * `eu_threshold_entry_conflict`. It never becomes a document id.
+   */
+  reference: string
+  /** VAT-exclusive amount to add, in cents. NEVER negative. */
+  amount: number
+  /**
+   * The art. 24b part of the same movement. INDEPENDENT of `amount`: a domestic
+   * electronic service raises this counter and not the other.
+   */
+  evidenceAmount: number
+  externalCompleteThroughDate: string
+  reason: string
+}
+
+/**
+ * Take a qualified amount back out of the running total.
+ *
+ * This is NOT a negative adjustment. Directive 2006/112/EC art. 90(1) reduces
+ * the taxable amount of a supply on cancellation, refusal or a price reduction
+ * after the supply, and the thresholds count the VALUE of the supplies — so a
+ * correction NAMES the movement it corrects, its qualification, the resource it
+ * rests on and its evidence, and never gives back more than that movement
+ * brought in.
+ */
+export interface EuThresholdCorrectionParams {
+  reference: string
+  /**
+   * Movement of THIS ledger whose taxable amount is reduced. Constrained to the
+   * ids the ledger mints (`opening`, or `adj_`/`cor_`/`con_`/`rel_`/`rev_`
+   * followed by 32 hex characters): it reaches a document path, and free text
+   * must not. A movement that brought no turnover in answers
+   * `eu_threshold_correction_target_not_correctable`.
+   */
+  correctsEntryId: string
+  kind: EuThresholdCorrectionKind
+  /**
+   * VAT-exclusive amount given back, in cents. The ledger keeps the BALANCE of
+   * each movement inside the transaction: the corrections of one movement never
+   * add up to more than it brought in.
+   */
+  amount: number
+  /** Its services part; independent of `amount`. */
+  evidenceAmount: number
+  relatedResourceType: string
+  relatedResourceId: string
+  evidenceReference: string
+  reason: string
+}
+
+/** Put the ledger under review: a declaration, so a stated reason is enough. */
+export interface EuThresholdReviewParams {
+  reason: string
+}
+
+/**
+ * Settle a review — by RECONCILIATION, never by comment.
+ *
+ * A review says the running total is known to be wrong. Reopening the ledger on
+ * a free-text note would put that same total back in front of the next verdict
+ * with a sentence for only guarantee. So you state the figures you actually
+ * verified, and the server compares them to its own: `reconciledVersion` pins
+ * the state that was checked (a movement recorded since answers
+ * `eu_threshold_reconciliation_stale`), and the two acquired totals must match
+ * (`eu_threshold_reconciliation_mismatch`, which returns both figures).
+ *
+ * What was verified is written into the immutable `review_resolved` movement,
+ * with its evidence reference.
+ */
+export interface EuThresholdReviewResolutionParams {
+  /** Ledger version the reconciliation was carried out against. */
+  reconciledVersion: number
+  /** Acquired total of the common counter, as verified. */
+  reconciledAcquiredMin: number
+  /** Acquired total of the art. 24b counter, as verified. */
+  reconciledAcquiredEvidenceMin: number
+  /** Where the reconciliation itself is filed. */
+  evidenceReference: string
+  reason: string
+}
+
+export interface EuThresholdEntryListParams {
+  limit?: number
+  starting_after?: string
+}
+
+/** The rate entry a destination-taxed decision was taken under. */
+export interface TaxDecisionDestinationRate {
+  registryVersion: string
+  memberState: string
+  /** Canonical territory rated — a region when the state publishes one. */
+  territoryId: string
+  regionId: string | null
+  centipercent: number
+  validFrom: string
+  validTo: string | null
+  source: string
+  verifiedAt: string
+}
+
+/**
+ * How the tax due at destination is declared. Never a place-of-supply rule.
+ *
+ * The registration is DATED: a one-stop shop opened in October does not declare
+ * a September sale.
+ */
+export interface TaxDecisionDestinationMechanism {
+  kind: 'oss_union' | 'local_registration'
+  memberState: string
+  reference: string
+  /** Member state of identification of the scheme; `null` for a local one. */
+  memberStateOfIdentification: string | null
+  effectiveFrom: string
+  effectiveTo: string | null
+}
+
+/**
+ * How the art. 24 ter single-evidence relaxation was settled, with the figures
+ * it rested on.
+ *
+ * It is COMPUTED by the engine on the ledger's EUR 100,000 counter — the one
+ * that never counts a distance sale of goods — and never declared by the
+ * seller. `undeterminable` is a first-class answer: two items of evidence are
+ * then required, and the issue says which fact is missing.
+ */
+export interface TaxDecisionEvidenceRelief {
+  status: 'available' | 'unavailable' | 'undeterminable'
+  /** Cap of art. 24 ter, 2nd subparagraph, in integer cents (10,000,000). */
+  capCents: number
+  stateId: string | null
+  year: string | null
+  previousYearAmountCents: number | null
+  cumulativeAfterMinCents: number | null
+  cumulativeAfterMaxCents: number | null
+  undeterminedCode:
+    | 'ledger_not_consulted'
+    | 'ledger_unavailable'
+    | 'amount_interval_straddles_cap'
+    | null
+}
+
+/**
+ * What the EU B2C destination rule concluded, frozen as data.
+ *
+ * `null` on every operation the rule does not reach. Present as soon as it
+ * covers a line, including on a decision that is NOT final: it then states what
+ * was settled and what is missing.
+ */
+export interface TaxDecisionEuB2cDestination {
+  coveredLineIds: string[]
+  ruleKinds: Array<'tbe_services' | 'intra_eu_distance_sale'>
+  destinationMemberState: string
+  destinationTerritoryId: string
+  place: 'origin' | 'destination' | null
+  /**
+   * What settled the place. `oss_union_registration`: the seller holds an ACTIVE
+   * Union one-stop-shop registration — for a French seller, registering IS how
+   * the option of art. 59c(3) is exercised, so the threshold has nothing left to
+   * decide and `threshold` stays `null`, exactly as on an explicit option.
+   * Sourced for France only: the way the option is exercised is fixed by the
+   * member state where it is exercised.
+   */
+  basis:
+    | 'multi_member_state_establishment'
+    | 'destination_option'
+    | 'oss_union_registration'
+    | 'threshold_exceeded'
+    | 'below_threshold'
+    | null
+  reference: string
+  detail: string
+  threshold: TaxDecisionThresholdTrace | null
+  option: { effectiveFrom: string; effectiveTo: string | null } | null
+  mechanism: TaxDecisionDestinationMechanism | null
+  rate: TaxDecisionDestinationRate | null
+  /** How the art. 24 ter relaxation was settled. `null` when the rule did not apply. */
+  evidenceRelief: TaxDecisionEvidenceRelief | null
+}
+
+/**
+ * The axes French law settles on its own, carried by a decision that is NOT
+ * final. An axis is `null` when it depends on the treatment the engines could
+ * not conclude; it is never guessed.
+ */
+export interface TaxDecisionSettledObligations {
   invoiceChannel: InvoiceChannel | null
   transactionReporting: TransactionReporting | null
   paymentReporting: PaymentReporting | null
@@ -2025,6 +2479,24 @@ export interface TaxDecision {
   invoiceChannel: InvoiceChannel | null
   transactionReporting: TransactionReporting | null
   paymentReporting: PaymentReporting | null
+  /**
+   * Obligation axes French law settles DESPITE a non-final decision.
+   *
+   * `null` on a final decision: the three axes above are the settled ones and
+   * nothing duplicates them. On `pending_verification` or `unsupported`, each
+   * axis is either the settled value or `null` when it genuinely depends on the
+   * treatment that could not be concluded. This object authorises NOTHING: a
+   * non-final decision is not invoiceable, never reaches a Plateforme Agréée and
+   * never opens a payment.
+   */
+  settledObligations: TaxDecisionSettledObligations | null
+  /**
+   * What the EU B2C destination rule concluded — verdict, threshold figures,
+   * declarative mechanism and the exact rate entry with its source, its
+   * verification date and its period. `null` on every operation the rule does
+   * not reach, and on a decision frozen before this field existed.
+   */
+  euB2cDestination: TaxDecisionEuB2cDestination | null
   /**
    * A foreign tax may apply. Facturino decides French VAT and the matching
    * French obligations; this case must be reviewed outside Facturino.

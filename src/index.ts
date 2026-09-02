@@ -19,6 +19,7 @@ import { Reporting } from './resources/reporting.js'
 import { AccountResource } from './resources/account.js'
 import { Billing } from './resources/billing.js'
 import { TaxDecisions } from './resources/taxDecisions.js'
+import { EuThresholdLedgers } from './resources/euThresholdLedgers.js'
 import { Usage } from './resources/usage.js'
 import { Validate } from './resources/validate.js'
 import { Reference } from './resources/reference.js'
@@ -46,6 +47,8 @@ class Facturino {
   readonly reference: Reference
   readonly sandbox: Sandbox
   readonly taxDecisions: TaxDecisions
+  /** Annual ledger of the common EUR 10,000 threshold. */
+  readonly euThresholdLedgers: EuThresholdLedgers
   readonly usage: Usage
   readonly validate: Validate
   readonly webhooks: Webhooks
@@ -75,6 +78,7 @@ class Facturino {
     this.reference = new Reference(client)
     this.sandbox = new Sandbox(client)
     this.taxDecisions = new TaxDecisions(client)
+    this.euThresholdLedgers = new EuThresholdLedgers(client)
     this.usage = new Usage(client)
     this.validate = new Validate(client)
     this.webhooks = new Webhooks()
@@ -236,6 +240,25 @@ export type {
   TaxDecisionCustomer,
   TaxDecisionIssue,
   TaxDecisionObligationReason,
+  TaxDecisionSettledObligations,
+  TaxDecisionEuB2cDestination,
+  EuThresholdLedger,
+  EuThresholdLedgerEntry,
+  EuThresholdLedgerEntryList,
+  EuThresholdReservation,
+  EuThresholdCoverageMode,
+  EuThresholdCorrectionKind,
+  EuThresholdReviewCode,
+  OpenEuThresholdLedgerParams,
+  EuThresholdAdjustmentParams,
+  EuThresholdCorrectionParams,
+  EuThresholdReviewParams,
+  EuThresholdReviewResolutionParams,
+  EuThresholdEntryListParams,
+  TaxDecisionThresholdTrace,
+  TaxDecisionDestinationRate,
+  TaxDecisionDestinationMechanism,
+  TaxDecisionEvidenceRelief,
   TaxDecisionVatBreakdownEntry,
   LocationEvidenceKind,
   LocationEvidenceParam,

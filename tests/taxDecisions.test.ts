@@ -248,6 +248,9 @@ describe('TaxDecisions resource', () => {
       invoiceChannel: null,
       transactionReporting: null,
       paymentReporting: null,
+      settledObligations: {
+        invoiceChannel: 'none', transactionReporting: 'ereporting', paymentReporting: null,
+      },
       issues: [{ code: 'vies_unavailable', message: 'VIES is unreachable.' }],
     }))
 
@@ -258,6 +261,300 @@ describe('TaxDecisions resource', () => {
     expect(decision.amountToCharge).toBeNull()
     expect(decision.totals).toBeNull()
     expect(decision.issues[0].code).toBe('vies_unavailable')
+    // The three document axes stay null — an axis is never read off a decision
+    // that did not conclude — while what French law settled anyway is a VALUE.
+    expect(decision.invoiceChannel).toBeNull()
+    expect(decision.settledObligations).toEqual({
+      invoiceChannel: 'none', transactionReporting: 'ereporting', paymentReporting: null,
+    })
+  })
+
+  it('reads the EU B2C destination trace, rate entry included', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, {
+      ...finalDecision,
+      euB2cDestination: {
+        coveredLineIds: ['line-1'],
+        ruleKinds: ['tbe_services'],
+        destinationMemberState: 'DE',
+        destinationTerritoryId: 'DE',
+        place: 'destination',
+        basis: 'threshold_exceeded',
+        reference: 'Directive 2006/112/CE art. 59 quater §1',
+        detail: 'Declared previous-year total exceeds the cap',
+        threshold: {
+          decidedOn: 'ledger_cumulative',
+          capCents: 1000000,
+          stateId: '2026_test',
+          year: '2026',
+          stateVersion: 4,
+          sequence: 7,
+          reservationId: 'claim_1',
+          coverageMode: 'mixed_channels',
+          previousYearAmountCents: 0,
+          currentYearOpeningCents: 100000,
+          openingDeclaredAt: '2026-01-01',
+          externalCompleteThroughDate: '2026-09-15',
+          adjustmentTotalCents: 40000,
+          adjustmentCount: 1,
+          cumulativeBeforeMinCents: 140000,
+          cumulativeBeforeMaxCents: 140000,
+          operationValueMinCents: 2900,
+          operationValueMaxCents: 2900,
+          cumulativeAfterMinCents: 142900,
+          cumulativeAfterMaxCents: 142900,
+        },
+        option: null,
+        mechanism: { kind: 'oss_union', memberState: 'DE', reference: 'régime UE' },
+        rate: {
+          registryVersion: 'eu-standard-rates-2026-09-01',
+          memberState: 'DE',
+          territoryId: 'DE',
+          regionId: null,
+          centipercent: 1900,
+          validFrom: '2026-09-01',
+          validTo: null,
+          source: 'Commission européenne',
+          verifiedAt: '2026-09-01',
+        },
+      },
+    }))
+
+    const decision = await facturino.taxDecisions.create(createParams, { idempotencyKey: 'order-eu' })
+
+    // The rate a document is taxed at must be auditable years later: version,
+    // source and verification date travel with the decision, not in prose.
+    expect(decision.euB2cDestination?.place).toBe('destination')
+    expect(decision.euB2cDestination?.rate?.centipercent).toBe(1900)
+    expect(decision.euB2cDestination?.rate?.registryVersion).toBe('eu-standard-rates-2026-09-01')
+    expect(decision.euB2cDestination?.mechanism?.kind).toBe('oss_union')
+    // The ledger the decision drew on, and the slice it took there.
+    expect(decision.euB2cDestination?.threshold?.stateId).toBe('2026_test')
+    expect(decision.euB2cDestination?.threshold?.sequence).toBe(7)
+    expect(decision.euB2cDestination?.threshold?.cumulativeAfterMinCents).toBe(142900)
+  })
+
+  it('opens a threshold year, reads it back and adjusts it', async () => {
+    const ledger = {
+      object: 'eu_threshold_ledger',
+      id: '2026_test',
+      companyId: 'cmp_1',
+      livemode: false,
+      year: '2026',
+      version: 1,
+      status: 'open',
+      review: null,
+      capCents: 1000000,
+      evidenceCapCents: 10000000,
+      opening: {
+        previousYearAmount: 250000,
+        currentYearOpening: 100000,
+        previousYearEvidenceAmount: 150000,
+        currentYearEvidenceOpening: 60000,
+        coverageMode: 'mixed_channels',
+        externalCompleteThroughDate: '2026-01-01',
+        declaredAt: '2026-01-01T09:00:00.000Z',
+      },
+      externalCompleteThroughDate: '2026-01-01',
+      adjustmentTotal: 0,
+      adjustmentEvidenceTotal: 0,
+      adjustmentCount: 0,
+      correctionTotal: 0,
+      correctionEvidenceTotal: 0,
+      correctionCount: 0,
+      acquiredMin: 100000,
+      acquiredMax: 100000,
+      acquiredEvidenceMin: 60000,
+      acquiredEvidenceMax: 60000,
+      reservedMin: 0,
+      reservedMax: 0,
+      reservedEvidenceMin: 0,
+      reservedEvidenceMax: 0,
+      remainingMin: 900000,
+      evidenceRemainingMin: 9940000,
+      settledCount: 0,
+      lastConsumedEffectiveAt: null,
+      reservations: [],
+      entries: [],
+      entriesHasMore: false,
+      entriesNextCursor: null,
+      created: '2026-01-01T00:00:00.000Z',
+      updated: '2026-01-01T00:00:00.000Z',
+    }
+
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, ledger))
+    const opened = await facturino.euThresholdLedgers.open({
+      year: '2026',
+      previousYearAmount: 250000,
+      currentYearOpening: 100000,
+      previousYearEvidenceAmount: 150000,
+      currentYearEvidenceOpening: 60000,
+      coverageMode: 'mixed_channels',
+      externalCompleteThroughDate: '2026-01-01',
+    })
+    expect(lastRequest().url).toBe('https://facturino.com/api/v1/eu-threshold-ledgers')
+    expect(opened.remainingMin).toBe(900000)
+    // Acquired and reserved are published apart, and never summed: a held slice
+    // may still disappear.
+    expect(opened.acquiredMin).toBe(100000)
+    expect(opened.reservedMax).toBe(0)
+    // The second counter has its own cap and its own remainder.
+    expect(opened.evidenceCapCents).toBe(10000000)
+    expect(opened.evidenceRemainingMin).toBe(9940000)
+
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, ledger))
+    await facturino.euThresholdLedgers.retrieve('2026')
+    expect(lastRequest().url).toBe('https://facturino.com/api/v1/eu-threshold-ledgers/2026')
+
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, { ...ledger, adjustmentTotal: 40000 }))
+    const adjusted = await facturino.euThresholdLedgers.adjust('2026', {
+      reference: 'adj-marketplace-08',
+      amount: 40000,
+      evidenceAmount: 25000,
+      externalCompleteThroughDate: '2026-09-15',
+      reason: 'Marketplace sales, August',
+    })
+    expect(lastRequest().url)
+      .toBe('https://facturino.com/api/v1/eu-threshold-ledgers/2026/adjustments')
+    expect(adjusted.adjustmentTotal).toBe(40000)
+  })
+
+  it('walks the movements with a cursor rather than pretending to show them all', async () => {
+    const page = {
+      object: 'list',
+      url: '/v1/eu-threshold-ledgers/2026/entries',
+      data: [{ id: 'adj_abc', sequence: 1, kind: 'external_adjustment' }],
+      has_more: true,
+      next_cursor: 'adj_abc',
+    }
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, page))
+    const first = await facturino.euThresholdLedgers.listEntries('2026', { limit: 1 })
+    expect(lastRequest().url)
+      .toBe('https://facturino.com/api/v1/eu-threshold-ledgers/2026/entries?limit=1')
+    expect(first.next_cursor).toBe('adj_abc')
+
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, { ...page, has_more: false, next_cursor: null }))
+    await facturino.euThresholdLedgers.listEntries('2026', { limit: 1, starting_after: 'adj_abc' })
+    expect(lastRequest().url).toBe(
+      'https://facturino.com/api/v1/eu-threshold-ledgers/2026/entries?limit=1&starting_after=adj_abc',
+    )
+  })
+
+  it('gives an amount back through a QUALIFIED correction, never a negative amount', async () => {
+    // Art. 90(1) reduces the taxable amount of an identified supply — so the
+    // correction names the movement it corrects, its qualification and its
+    // evidence. There is no generic minus sign anywhere in this resource.
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, { object: 'eu_threshold_ledger', correctionTotal: 20000 }))
+    const corrected = await facturino.euThresholdLedgers.correct('2026', {
+      reference: 'cor-credit-note-12',
+      correctsEntryId: 'adj_abc',
+      kind: 'credit_note',
+      amount: 20000,
+      evidenceAmount: 10000,
+      relatedResourceType: 'credit_note',
+      relatedResourceId: 'crn_123',
+      evidenceReference: 'AV-2026-0012',
+      reason: 'Full credit note on a sale counted in August',
+    })
+    expect(lastRequest().url)
+      .toBe('https://facturino.com/api/v1/eu-threshold-ledgers/2026/corrections')
+    expect(JSON.parse(lastRequest().init.body as string).correctsEntryId).toBe('adj_abc')
+    expect(corrected.correctionTotal).toBe(20000)
+  })
+
+  it('reads the REMAINING balance of a movement, not only its amount', async () => {
+    // A reader that only saw `amountMin` would offer a correction the ledger is
+    // about to refuse: a movement gives back what it brought in, once.
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, {
+      object: 'list',
+      url: '/v1/eu-threshold-ledgers/2026/entries',
+      data: [{
+        id: 'opening', kind: 'opening', amountMin: 100000,
+        correctable: true, correctedMin: 30000, correctionCount: 1,
+        remainingMin: 70000, remainingEvidenceMin: 50000,
+      }],
+      has_more: false,
+      next_cursor: null,
+    }))
+    const page = await facturino.euThresholdLedgers.listEntries('2026')
+    expect(page.data[0].remainingMin).toBe(70000)
+    expect(page.data[0].correctedMin).toBe(30000)
+    expect(page.data[0].correctable).toBe(true)
+  })
+
+  it('stops deciding on a ledger under review, and settles it by RECONCILIATION', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, {
+      object: 'eu_threshold_ledger',
+      status: 'review_required',
+      review: { code: 'declared_by_administrator', detail: 'Opening figure disputed', openedAt: 'x' },
+    }))
+    const reviewed = await facturino.euThresholdLedgers.review('2026', {
+      reason: 'Opening figure disputed by the accountant',
+    })
+    expect(lastRequest().url).toBe('https://facturino.com/api/v1/eu-threshold-ledgers/2026/review')
+    expect(reviewed.status).toBe('review_required')
+
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, { object: 'eu_threshold_ledger', status: 'open', review: null }))
+    const settled = await facturino.euThresholdLedgers.resolveReview('2026', {
+      reconciledVersion: 4,
+      reconciledAcquiredMin: 100000,
+      reconciledAcquiredEvidenceMin: 60000,
+      evidenceReference: 'RECON-2026-09',
+      reason: 'Figure confirmed and corrected by adjustment',
+    })
+    expect(lastRequest().url)
+      .toBe('https://facturino.com/api/v1/eu-threshold-ledgers/2026/review/resolve')
+    // A comment alone never reopens a ledger: the verified figures travel.
+    const sent = JSON.parse(lastRequest().init.body as string)
+    expect(sent.reconciledVersion).toBe(4)
+    expect(sent.reconciledAcquiredMin).toBe(100000)
+    expect(sent.evidenceReference).toBe('RECON-2026-09')
+    expect(settled.status).toBe('open')
+  })
+
+  it('lets the two counters diverge: neither bounds the other', async () => {
+    // The common threshold counts only cross-border supplies; the evidence one
+    // counts domestic electronic services too. A publisher selling mostly at
+    // home legitimately declares far more on the second.
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, {
+      object: 'eu_threshold_ledger', acquiredMin: 10000, acquiredEvidenceMin: 2000000,
+    }))
+    const opened = await facturino.euThresholdLedgers.open({
+      year: '2026',
+      previousYearAmount: 10000,
+      currentYearOpening: 10000,
+      previousYearEvidenceAmount: 4000000,
+      currentYearEvidenceOpening: 2000000,
+      coverageMode: 'facturino_only',
+      externalCompleteThroughDate: '2026-01-01',
+    })
+    expect(opened.acquiredEvidenceMin).toBeGreaterThan(opened.acquiredMin)
+  })
+
+  it('sends the movement of goods an integration line needs', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, finalDecision))
+
+    await facturino.taxDecisions.create({
+      taxSource: 'integration',
+      customerId: 'cus_8f2k4m9n',
+      effectiveAt: '2026-09-15',
+      currency: 'eur',
+      priceMode: 'tax_exclusive',
+      lines: [{
+        reference: 'line-1',
+        description: 'Chaise',
+        category: 'goods',
+        goodsMovement: 'dispatched_to_buyer_territory',
+        unitAmount: 2900,
+        quantity: '1',
+        vatRate: 1900,
+        vatCode: 'S',
+      }],
+    }, { idempotencyKey: 'order-goods' })
+
+    const body = JSON.parse(lastRequest().init.body as string) as {
+      lines: Array<{ goodsMovement?: string }>
+    }
+    expect(body.lines[0].goodsMovement).toBe('dispatched_to_buyer_territory')
   })
 
   it('retries a pending decision with new evidence', async () => {
@@ -502,7 +799,8 @@ describe('parity guard', () => {
     const decision: Pick<
       import('../src/types.js').TaxDecision,
       'status' | 'amountToCharge' | 'totals' | 'invoiceChannel'
-      | 'transactionReporting' | 'paymentReporting' | 'foreignTaxReviewRequired'
+      | 'transactionReporting' | 'paymentReporting' | 'settledObligations'
+      | 'euB2cDestination' | 'foreignTaxReviewRequired'
       | 'retryOfTaxDecisionId' | 'expired' | 'rulesVersion' | 'operationFingerprint'
       | 'obligationReasons' | 'vies' | 'issues'
     > = {
@@ -512,6 +810,10 @@ describe('parity guard', () => {
       invoiceChannel: 'einvoicing',
       transactionReporting: 'none',
       paymentReporting: 'fr212',
+      // A final decision duplicates nothing: its axes are the three above.
+      settledObligations: null,
+      // `null` on every operation the EU B2C destination rule does not reach.
+      euB2cDestination: null,
       foreignTaxReviewRequired: false,
       retryOfTaxDecisionId: null,
       expired: false,
