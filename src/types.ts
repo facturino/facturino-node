@@ -38,6 +38,16 @@ export interface PaginatedResponse<T> {
   next_cursor: string | null
 }
 
+/** One detailed reason inside an {@link ApiErrorBody}. */
+export interface ApiErrorIssue {
+  /** Stable code, safe to branch on. */
+  code: string
+  /** Field in cause (dotted path), or `null` when the reason names no field. */
+  param: string | null
+  /** Human-readable reason. */
+  message: string
+}
+
 export interface ApiErrorBody {
   error: {
     type: string
@@ -47,6 +57,13 @@ export interface ApiErrorBody {
     doc_url?: string
     request_id: string
     hint?: string
+    /**
+     * Detailed reasons, present only when one refusal carries several.
+     *
+     * Additive: `code`, `param`, `message` and `hint` are unchanged, and `param`
+     * still points at the first field in cause.
+     */
+    issues?: ApiErrorIssue[]
   }
 }
 
@@ -1905,7 +1922,13 @@ export interface ViesResult {
 /** Normalized territorial evidence kept with the decision. No raw signal is exposed. */
 export interface LocationEvidenceResult {
   kind: LocationEvidenceKind
-  territoryId: string
+  /**
+   * Canonical territory the evidence points to, or `null` when it resolved at
+   * COUNTRY level only: a network kind (`ip_geolocation`, `bank_details`,
+   * `sim_mobile_country`, `fixed_line`) supplied without a postal code. The
+   * country is then `declaredCountry`.
+   */
+  territoryId: string | null
   declaredCountry: string
   declaredPostalCode: string | null
   thirdParty: boolean

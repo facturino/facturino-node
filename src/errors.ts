@@ -1,4 +1,4 @@
-import type { ApiErrorBody } from './types.js'
+import type { ApiErrorBody, ApiErrorIssue } from './types.js'
 
 /** Base SDK error. */
 export class FacturinoError extends Error {
@@ -18,6 +18,15 @@ export class ApiError extends FacturinoError {
   readonly docUrl?: string
   readonly requestId: string
   readonly hint?: string
+  /**
+   * Detailed reasons behind this one refusal.
+   *
+   * Empty when the API sent none — reading `issues` never requires a null
+   * check, and an empty list means the refusal had nothing more to say than
+   * `code` and `message`. `code` stays the value to branch on; each entry adds
+   * a more precise code and, when it is certain, the field in cause.
+   */
+  readonly issues: readonly ApiErrorIssue[]
 
   constructor(status: number, body: ApiErrorBody) {
     const err = body.error
@@ -30,6 +39,7 @@ export class ApiError extends FacturinoError {
     this.docUrl = err.doc_url
     this.requestId = err.request_id
     this.hint = err.hint
+    this.issues = err.issues ?? []
   }
 }
 

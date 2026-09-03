@@ -83,6 +83,65 @@ describe('Error mapping', () => {
     }
   })
 
+  /** An error response carrying detailed reasons. */
+  function detailedResponse(): Response {
+    return {
+      ok: false,
+      status: 422,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () =>
+        Promise.resolve({
+          error: {
+            type: 'validation_error',
+            code: 'validation_error',
+            message: 'Buyer territory could not be resolved.',
+            param: 'customerId',
+            request_id: 'req_abc',
+            issues: [
+              {
+                code: 'invalid_postal_code',
+                param: 'customer.address.postalCode',
+                message: 'Buyer territory could not be resolved.',
+              },
+            ],
+          },
+        }),
+      text: () => Promise.resolve(''),
+    } as unknown as Response
+  }
+
+  it('exposes the detailed reasons of a refusal on `issues`', async () => {
+    mockFetch.mockResolvedValueOnce(detailedResponse())
+    try {
+      await client.invoices.get('inv_1')
+      throw new Error('should have thrown')
+    } catch (err) {
+      const e = err as ValidationError
+      // The main code is unchanged: it stays the value to branch on.
+      expect(e.code).toBe('validation_error')
+      expect(e.param).toBe('customerId')
+      // The detail says WHICH field to fix.
+      expect(e.issues).toEqual([
+        {
+          code: 'invalid_postal_code',
+          param: 'customer.address.postalCode',
+          message: 'Buyer territory could not be resolved.',
+        },
+      ])
+    }
+  })
+
+  it('gives an EMPTY list when a refusal carries no detail — never undefined', async () => {
+    // Reading `issues` must never need a null check.
+    mockFetch.mockResolvedValueOnce(errorResponse(404, 'not_found_error', 'not_found'))
+    try {
+      await client.invoices.get('inv_404')
+      throw new Error('should have thrown')
+    } catch (err) {
+      expect((err as ApiError).issues).toEqual([])
+    }
+  })
+
   it('preserves request_id and doc_url on every ApiError', async () => {
     mockFetch.mockResolvedValueOnce(errorResponse(422, 'validation_error', 'validation_error'))
     try {

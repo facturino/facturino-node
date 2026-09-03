@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Facturino from '../src/index.js'
+import type { LocationEvidenceResult } from '../src/types.js'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -824,5 +825,32 @@ describe('parity guard', () => {
       issues: [],
     }
     expect(decision.status).toBe('final')
+  })
+})
+
+describe('location evidence resolved at country level', () => {
+  it('passes a null territoryId through, typed as such', async () => {
+    mockFetch.mockReset()
+    const facturino = new Facturino('fac_test_abc123')
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, {
+      ...finalDecision,
+      locationEvidence: [
+        { kind: 'billing_address', territoryId: 'FR-MET', declaredCountry: 'FR', declaredPostalCode: '75001', thirdParty: false, source: 'declared', collectedAt: '2026-09-15', reference: null },
+        // Resolved at COUNTRY level: a geolocation provider returns a country, never a postal code.
+        { kind: 'ip_geolocation', territoryId: null, declaredCountry: 'FR', declaredPostalCode: null, thirdParty: true, source: 'network', collectedAt: '2026-09-15', reference: null },
+      ],
+    }))
+
+    const decision = await facturino.taxDecisions.create({
+      ...createParams,
+      locationEvidence: [
+        { kind: 'billing_address', country: 'FR', postalCode: '75001', thirdParty: false, source: 'declared', collectedAt: '2026-09-15' },
+        { kind: 'ip_geolocation', country: 'FR', thirdParty: true, source: 'network', collectedAt: '2026-09-15' },
+      ],
+    }, { idempotencyKey: 'order-fr' })
+
+    const network: LocationEvidenceResult | undefined = decision.locationEvidence?.[1]
+    expect(network?.territoryId).toBeNull()
+    expect(network?.declaredCountry).toBe('FR')
   })
 })

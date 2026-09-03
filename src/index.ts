@@ -98,6 +98,7 @@ export type {
   PaginationParams,
   PaginatedResponse,
   ApiErrorBody,
+  ApiErrorIssue,
   Address,
   Contact,
   ContactRole,
