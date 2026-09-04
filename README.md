@@ -62,7 +62,7 @@ const invoice = await facturino.invoices.create({
 // 4. Choose your collection flow — see the two variants below.
 ```
 
-**Immediate collection** — capture the decided amount, verify, then finalize:
+**Immediate collection** — capture the decided amount, verify, then finalize WITH the collection:
 
 ```typescript
 // Capture exactly amountToCharge through your payment provider, payment
@@ -81,16 +81,19 @@ const source = await facturino.taxDecisions.retrieve(decision.id)
 if (settlement.amount !== source.amountToCharge) throw new Error('amount mismatch')
 if (settlement.currency !== source.currency) throw new Error('currency mismatch')
 
-await facturino.invoices.finalize(invoice.id)
-
-// Record the REAL payment — its real date, method and the settlement's
+// Finalize AND record the REAL payment in one call: the numbering and the
+// collection land in the same transaction, so the issued original (PDF and
+// Factur-X) is rendered on a settled invoice. `payment` is the very object
+// `payments.create()` takes — its real date, method and the settlement's
 // financial reference (never the decision id).
-await facturino.payments.create(invoice.id, {
-  amount: settlement.amount,
-  // transfer, card, check, cash, direct_debit, sepa, paypal or other
-  method: settlement.method,
-  reference: settlement.reference,
-  paidAt: settlement.paidAt,
+await facturino.invoices.finalize(invoice.id, {
+  payment: {
+    amount: settlement.amount,
+    // transfer, card, check, cash, direct_debit, sepa, paypal or other
+    method: settlement.method,
+    reference: settlement.reference,
+    paidAt: settlement.paidAt,
+  },
 })
 
 // Send to the platform only on the channel the FROZEN decision states.

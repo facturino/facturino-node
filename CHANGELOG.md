@@ -4,6 +4,27 @@ All notable changes to `@facturino/node` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.3.0] - 2026-09-04
+
+### Added
+- `invoices.finalize(id, { payment })` — an optional collection applied in the
+  SAME transaction as the numbering, so an invoice already paid before issuance
+  is ISSUED settled: the original PDF and Factur-X are rendered on a settled
+  document. `payment` is the very object `payments.create()` takes, and the
+  resulting payment sub-resource is indistinguishable from one recorded
+  afterwards. All or nothing: a collection beyond the amount due is refused
+  (`422 payment_exceeds_amount_due`) and the invoice stays a draft. New type
+  `InvoiceFinalizeParams`. Overloaded, NOT re-ordered: `finalize(id)` and
+  `finalize(id, options)` keep their exact meaning — only an object carrying
+  `payment` is read as a body.
+- `InvoiceDates.paidAt` — the actual settlement date, absent or `null` until the
+  invoice is fully paid.
+- `JobStatus` now names `completed_with_errors` and `superseded`. `superseded`
+  is a TERMINAL state without a deliverable: the render was produced for a
+  ledger revision that a collection, a cancellation or a refund has since
+  overtaken. It is not a failure — call `invoices.getPdf(id)` again and a
+  current render is published. Tolerate unknown values: more may be added.
+
 ## [2.2.0] - 2026-09-03
 
 ### Added

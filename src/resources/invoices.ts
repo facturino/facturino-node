@@ -5,6 +5,7 @@ import type {
   Invoice,
   InvoiceCreateParams,
   InvoiceBindTaxDecisionParams,
+  InvoiceFinalizeParams,
   InvoiceUpdateParams,
   InvoiceListParams,
   InvoiceRetrieveParams,
@@ -121,9 +122,43 @@ export class Invoices {
     return this.client.post<Invoice>(`/v1/invoices/${id}/bind-tax-decision`, params, options)
   }
 
-  /** Assign number and lock. Irreversible. */
-  async finalize(id: string, options?: RequestOptions): Promise<Invoice> {
-    return this.client.post<Invoice>(`/v1/invoices/${id}/finalize`, undefined, options)
+  /**
+   * Assign number and lock. Irreversible.
+   *
+   * Pass `{ payment }` when the invoice was already collected before issuance:
+   * numbering and collection are applied in the SAME transaction, so the
+   * original PDF and Factur-X are rendered on a settled invoice and say so.
+   * `payment` is the very object `payments.create()` takes.
+   *
+   * ```ts
+   * await facturino.invoices.finalize(invoiceId, {
+   *   payment: { amount: 120000, method: 'card', paidAt: new Date().toISOString() },
+   * })
+   * ```
+   *
+   * All or nothing: a collection beyond the amount due is refused (422
+   * `payment_exceeds_amount_due`) and the invoice stays a draft — no number is
+   * burned. Without a body, the behaviour is unchanged.
+   */
+  async finalize(id: string, options?: RequestOptions): Promise<Invoice>
+  async finalize(
+    id: string,
+    params: InvoiceFinalizeParams,
+    options?: RequestOptions,
+  ): Promise<Invoice>
+  async finalize(
+    id: string,
+    paramsOrOptions?: InvoiceFinalizeParams | RequestOptions,
+    maybeOptions?: RequestOptions,
+  ): Promise<Invoice> {
+    // `finalize(id, { idempotencyKey })` has always meant "options", and still
+    // does: only an object carrying `payment` is a body. Adding a parameter in
+    // front of the options would have silently sent request options as a
+    // request body for every existing caller.
+    const isBody = paramsOrOptions !== undefined && 'payment' in paramsOrOptions
+    const params = isBody ? (paramsOrOptions as InvoiceFinalizeParams) : undefined
+    const options = isBody ? maybeOptions : (paramsOrOptions as RequestOptions | undefined)
+    return this.client.post<Invoice>(`/v1/invoices/${id}/finalize`, params, options)
   }
 
   /** Submit to PA. Returns 202 (async). */

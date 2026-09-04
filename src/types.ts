@@ -236,6 +236,12 @@ export interface InvoiceDates {
   serviceEnd: string | null
   finalizedAt: string | null
   sentAt: string | null
+  /**
+   * Actual settlement date: the `paidAt` of the payment that cleared the
+   * balance. Absent or `null` while a balance remains, cleared again when a
+   * reversal reopens one.
+   */
+  paidAt?: string | null
 }
 
 export interface InvoicePaymentTerms {
@@ -568,6 +574,17 @@ export interface PaymentCreateParams {
   method: PaymentMethod | 'other'
   reference?: string
   paidAt: string
+}
+
+/**
+ * Optional body of `invoices.finalize()`.
+ *
+ * An invoice already collected before it is issued is finalized AND settled in
+ * the same transaction, so the original PDF and Factur-X are rendered on a
+ * settled invoice. `payment` is the very object `payments.create()` takes.
+ */
+export interface InvoiceFinalizeParams {
+  payment?: PaymentCreateParams
 }
 
 /** Result of cancelling a payment — the invoice is re-settled from the reversal. */
@@ -1308,7 +1325,19 @@ export interface EReportingListParams extends PaginationParams {
 // ---------------------------------------------------------------------------
 
 export type JobType = 'pdf' | 'facturx' | 'fec' | 'export' | 'rgpd_export' | 'audit_trail_pdf'
-export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed'
+/**
+ * `superseded` is a TERMINAL state without a deliverable: the render was
+ * produced for a ledger revision that a collection, a cancellation or a refund
+ * has since overtaken. It is not a failure — request the document again and a
+ * current render is published. New values may be added: tolerate unknown ones.
+ */
+export type JobStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'completed_with_errors'
+  | 'failed'
+  | 'superseded'
 
 export interface Job {
   id: string

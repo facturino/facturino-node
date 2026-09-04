@@ -22,7 +22,7 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503])
 const INITIAL_RETRY_DELAY_MS = 500
 const MAX_RETRY_DELAY_MS = 30_000
 
-export const VERSION = '2.2.0'
+export const VERSION = '2.3.0'
 
 /** HTTP client with retries, exponential backoff, and structured errors. */
 export class HttpClient {

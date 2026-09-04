@@ -220,6 +220,64 @@ describe('Invoices resource', () => {
       expect(url).toContain('/v1/invoices/inv_123/finalize')
       expect(opts.method).toBe('POST')
     })
+
+    it('NE ROMPT PAS `finalize(id, { idempotencyKey })` : options, pas corps', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, { id: 'inv_123', object: 'invoice', status: 'finalized' })
+      )
+
+      await facturino.invoices.finalize('inv_123', { idempotencyKey: 'key_abc' })
+
+      const [, opts] = mockFetch.mock.calls[0]
+      expect(opts.body).toBeUndefined()
+      expect(opts.headers['Idempotency-Key']).toBe('key_abc')
+    })
+
+    it('accepte corps ET options ensemble', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, { id: 'inv_123', object: 'invoice', status: 'paid' })
+      )
+
+      const payment = { amount: 120000, method: 'card' as const, paidAt: '2026-05-10T12:00:00.000Z' }
+      await facturino.invoices.finalize('inv_123', { payment }, { idempotencyKey: 'key_xyz' })
+
+      const [, opts] = mockFetch.mock.calls[0]
+      expect(JSON.parse(opts.body as string)).toEqual({ payment })
+      expect(opts.headers['Idempotency-Key']).toBe('key_xyz')
+    })
+
+    it('sends no body when no collection accompanies the issuance', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, { id: 'inv_123', object: 'invoice', status: 'finalized' })
+      )
+
+      await facturino.invoices.finalize('inv_123')
+
+      const [, opts] = mockFetch.mock.calls[0]
+      expect(opts.body).toBeUndefined()
+    })
+
+    it('issues an already-collected invoice as settled, in one call', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, {
+          id: 'inv_123', object: 'invoice', status: 'paid', number: 'FAC-00001',
+          totals: { totalTTC: 120000, amountPaid: 120000, amountDue: 0 },
+        })
+      )
+
+      const payment = {
+        amount: 120000,
+        method: 'card' as const,
+        reference: 'ch_3Kj9aLZ',
+        paidAt: '2026-05-10T12:00:00.000Z',
+      }
+      const result = await facturino.invoices.finalize('inv_123', { payment })
+
+      expect(result.status).toBe('paid')
+      const [url, opts] = mockFetch.mock.calls[0]
+      expect(url).toContain('/v1/invoices/inv_123/finalize')
+      expect(JSON.parse(opts.body as string)).toEqual({ payment })
+    })
   })
 
   describe('send', () => {

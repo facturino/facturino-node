@@ -144,6 +144,7 @@ export type {
   PaymentTokenResponse,
   Payment,
   PaymentCreateParams,
+  InvoiceFinalizeParams,
   Customer,
   CustomerCreateParams,
   CustomerUpdateParams,
