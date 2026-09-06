@@ -175,6 +175,7 @@ export type {
   CreditNoteListParams,
   WebhookEventType,
   WebhookEvent,
+  EventRetryResult,
   EventListParams,
   WebhookEndpoint,
   WebhookEndpointCreateParams,

@@ -4,6 +4,21 @@ All notable changes to `@facturino/node` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.0] - 2026-09-06
+
+### Fixed
+- `events.retry()` is typed with what the API actually answers, an
+  `EventRetryResult` `{ id, object, retryScheduled, endpointId? }`; it was
+  declared as the full event, which the endpoint never returned. Runtime
+  behaviour is unchanged.
+
+### Added
+- `events.retry(id, { endpointId })` replays an event to one endpoint, even if
+  already delivered. `WebhookEvent.data` is typed with the document fields
+  every event now carries: `number`, `documentStatus`, `transmissionStatus`,
+  `transmissionDetail`, `paymentStatus`, `metadata` (credit notes add
+  `relatedInvoiceId`).
+
 ## [2.4.0] - 2026-09-06
 
 ### Added

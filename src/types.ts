@@ -1057,12 +1057,41 @@ export type WebhookEventType =
   | 'subscription.cancelled'
   | 'subscription.renewed'
 
+/** Answer of `POST /v1/events/{id}/retry`: a scheduling receipt, not the event. */
+export interface EventRetryResult {
+  id: string
+  object: 'event'
+  retryScheduled: boolean
+  /** Present when the replay targets one endpoint. */
+  endpointId?: string
+}
+
 export interface WebhookEvent {
   id: string
   object: 'event'
   type: WebhookEventType
   apiVersion: string
-  data: { id: string; object: string; [key: string]: unknown }
+  /**
+   * `status` / `previous_status` describe the hop; the other fields describe
+   * the document as written when the event was produced (number, the three
+   * axes, your metadata). `payment.received` adds amount, total_paid, total,
+   * total_due (invoice total, historical name) and amountDue.
+   */
+  data: {
+    id: string
+    object: string
+    status?: string
+    previous_status?: string
+    livemode?: boolean
+    number?: string | null
+    documentStatus?: string
+    transmissionStatus?: string
+    transmissionDetail?: string | null
+    paymentStatus?: string
+    metadata?: Record<string, unknown>
+    relatedInvoiceId?: string | null
+    [key: string]: unknown
+  }
   request?: {
     id?: string
     idempotencyKey?: string
