@@ -4,6 +4,30 @@ All notable changes to `@facturino/node` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.0] - 2026-09-06
+
+### Added
+- `InvoiceEinvoicing` exposes `paStatusCode`, `rejectionReason` (the
+  platform's reason for a rejection, whatever channel it arrived through),
+  `refusalReason`, `submissionArtefact` and `previousSubmissions` (the closed
+  attempts of a document resent after a platform rejection); `InvoiceFiles`
+  exposes `correctedXmlPath` — the CII regenerated for a deposit when the frozen
+  original no longer satisfies a CIUS-FR rule.
+
+### Changed
+- `EReportingType` lists the eight declaration types the API accepts
+  (`domestic_b2b` and the four `payment_*` types; the former `payment` value
+  never existed on the API). `EReportingStatus` gains `skipped`.
+- `EReporting` exposes the published fields: `state`, `volet`, `periodStart`,
+  `periodEnd`, `attempt`, `blockedReason`, `paRejectionReason`,
+  `reconciliationReason`, `supersedesDeclarationId`, `supersededByDeclarationId`.
+- `EReportingLine` carries the optional per-line fields: `date`, `issueDate`,
+  `invoiceNumber`, `country`, `partnerVat`, `partnerName`, `vatCategoryCode`,
+  `vatexCode`, `count`, `documentType` (`380` / `381`), `originalInvoiceNumber`
+  and `originalInvoiceDate` (the invoice a credit note corrects; both are
+  required to transmit a unit credit note, DGFiP G1.32). Every e-reporting type
+  is re-exported from the package entry.
+
 ## [2.3.0] - 2026-09-04
 
 ### Added

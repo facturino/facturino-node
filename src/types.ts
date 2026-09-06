@@ -255,16 +255,56 @@ export interface InvoicePaymentTerms {
   collectionFee: string
 }
 
+/**
+ * The CII regenerated for a deposit when the frozen original no longer
+ * satisfies a CIUS-FR rule: same number, same amounts, stored under
+ * `files.correctedXmlPath`; the archived Factur-X is never rewritten.
+ */
+export interface InvoiceSubmissionArtefact {
+  kind: 'cii'
+  path: string
+  generatedAt: string
+  /** Rules the regeneration satisfied (e.g. `BR-FR-08`). */
+  correctedRules: string[]
+}
+
+/**
+ * A closed attempt of the same document on the platform: a rejected deposit
+ * resent under the same number opens a new attempt whose identifiers are the
+ * live ones on `InvoiceEinvoicing`.
+ */
+export interface InvoicePreviousSubmission {
+  paId: string | null
+  paTransactionId: string | null
+  paIdempotencyKey: string | null
+  paStatus: string | null
+  paStatusCode: string | null
+  paErrorCode: string | null
+  rejectionReason: string | null
+  sentAt: string | null
+  /** When the next attempt was opened. */
+  closedAt: string
+}
+
 export interface InvoiceEinvoicing {
   paId: string | null
   paStatus: string | null
+  /** Raw platform status code (e.g. `fr:200`). */
+  paStatusCode?: string | null
   paTransactionId: string | null
   paErrorCode: string | null
+  /** Platform's reason for a rejection (`rejected`), whatever channel it arrived through. */
+  rejectionReason?: string | null
+  /** Buyer's reason for a refusal (`refused`). */
+  refusalReason?: string | null
   paIdempotencyKey: string | null
   peppolDeliveryId: string | null
   ereportingId: string | null
   sentAt: string | null
   trackingId: string | null
+  submissionArtefact?: InvoiceSubmissionArtefact | null
+  /** Closed attempts, oldest first; absent until a rejected deposit is resent. */
+  previousSubmissions?: InvoicePreviousSubmission[]
 }
 
 export interface InvoicePortal {
@@ -284,6 +324,8 @@ export interface InvoiceFiles {
   pdfPath?: string
   facturxPath?: string
   xmlPath?: string
+  /** CII regenerated for the deposit, see `einvoicing.submissionArtefact`. */
+  correctedXmlPath?: string
 }
 
 export interface Invoice {
@@ -1274,35 +1316,90 @@ export interface InvoiceExportParams {
 // E-reporting
 // ---------------------------------------------------------------------------
 
-export type EReportingType = 'b2c' | 'international' | 'intra_eu' | 'payment'
-export type EReportingStatus = 'draft' | 'submitted' | 'accepted' | 'rejected'
+export type EReportingType =
+  | 'b2c' | 'international' | 'intra_eu' | 'domestic_b2b'
+  | 'payment_b2c' | 'payment_international' | 'payment_intra_eu' | 'payment_domestic_b2b'
+/**
+ * SUMMARY projection of `state`: `reserved` → `draft`, `blocked` → `skipped`,
+ * `acknowledged` → `submitted` (the platform's technical acknowledgement is not
+ * an acceptance). `accepted` is the administration's acceptance as reported by
+ * the platform; `rejected` carries its reason in `paRejectionReason`.
+ */
+export type EReportingStatus = 'draft' | 'submitted' | 'accepted' | 'rejected' | 'skipped'
+/** Actual state of a declaration. `reserved` means NOTHING has been transmitted yet. */
+export type EReportingState =
+  | 'reserved' | 'submitting' | 'queued' | 'submitted' | 'acknowledged'
+  | 'accepted' | 'rejected' | 'blocked' | 'reconciliation_required'
+export type EReportingVolet = 'transaction' | 'payment'
+export type EReportingBlockedReason =
+  | 'pa_not_supported' | 'ereporting_not_enabled' | 'tax_decision_required' | 'tax_snapshot_inconsistent'
+/** UNTDID 5305 VAT category decided for the line. */
+export type EReportingVatCategoryCode = 'S' | 'Z' | 'E' | 'AE' | 'K' | 'G' | 'O'
+/** BT-3 of the source document of a unit line: `380` invoice, `381` credit note. */
+export type EReportingDocumentType = '380' | '381'
 
-/** Input line: amounts in centimes, vatRate in centipercent */
+/** Input line: amounts in integer centimes, vatRate in centipercent. */
 export interface EReportingLine {
   category: string
+  /** Integer centimes. */
   amount: number
+  /** Centi-percent (2000 = 20.00 %). */
   vatRate: number
   vatAmount: number
+  /** Transaction day (B2C) or invoice date (unit lines), `YYYY-MM-DD`. */
+  date?: string
+  /** Payment lines on a unit invoice: its issue date, distinct from `date`. */
+  issueDate?: string
+  /** Unit lines: the invoice or credit note declared. */
+  invoiceNumber?: string
+  /** Buyer country (ISO 3166-1 alpha-2). */
+  country?: string
+  partnerVat?: string
+  /** Buyer's legal name frozen by the tax decision (G2.19). */
+  partnerName?: string
+  /** Decided VAT category; absent on declarations created before it existed. */
+  vatCategoryCode?: EReportingVatCategoryCode
+  /** Decided exemption code; `null` explicitly means no VATEX code. */
+  vatexCode?: string | null
+  /** B2C only: number of distinct invoices aggregated on `date`. */
+  count?: number
+  /** Unit lines: `380` invoice, `381` credit note. */
+  documentType?: EReportingDocumentType
+  /** Credit notes (`381`) only: number of the invoice corrected (BT-25). Required, with its date, to transmit the credit note (G1.32). */
+  originalInvoiceNumber?: string
+  /** Credit notes (`381`) only: issue date of that invoice, `YYYY-MM-DD` (BT-26). Required, with the number, to transmit the credit note (G1.32). */
+  originalInvoiceDate?: string
 }
 
-/** Response line: amounts in integer centimes, rates in centièmes de pourcent */
-export interface EReportingLineResponse {
-  category: string
-  amount: number
-  vatRate: number
-  vatAmount: number
-}
+/** Response line: same shape as the input line. */
+export interface EReportingLineResponse extends EReportingLine {}
 
 export interface EReporting {
   id: string
   object: 'ereporting'
+  /** Summary derived from `state` — never an authority of its own. */
   status: EReportingStatus
+  state: EReportingState
   type: EReportingType
+  volet: EReportingVolet
   period: string
+  periodStart: string | null
+  periodEnd: string | null
   totalHT: number
   totalTVA: number
   totalTTC: number
   lines: EReportingLineResponse[]
+  /** `1` for the first declaration of these facts; incremented only by a retry. */
+  attempt: number
+  blockedReason: EReportingBlockedReason | null
+  /** Refusal reason transmitted by the platform, whatever channel it arrived through. */
+  paRejectionReason: string | null
+  /** Bounded reason of an ambiguous remote outcome; no blind resend until resolved. */
+  reconciliationReason: string | null
+  /** Refused declaration this attempt replaces, if any. */
+  supersedesDeclarationId: string | null
+  /** Attempt created from this refused declaration; a refused declaration is replaced once. */
+  supersededByDeclarationId: string | null
   submittedAt?: string
   paResponseId?: string
   livemode: boolean
