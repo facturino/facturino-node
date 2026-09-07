@@ -4,6 +4,23 @@ All notable changes to `@facturino/node` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.6.0] - 2026-09-07
+
+### Added
+- `InvoiceEinvoicing.rejectionCategory` and
+  `InvoicePreviousSubmission.rejectionCategory`: the server's stable reading
+  of a rejection or a refusal (`buyer_not_in_directory`, `format_invalid`,
+  `semantic_error`, `duplicate`, `platform_auth`, `platform_unavailable`,
+  `refused_by_buyer`, `suspended`, `unknown`), exported as
+  `PaRejectionCategory`. `null` once a new attempt is opened; the raw words
+  stay in `rejectionReason`.
+- `WebhookEvent.data` carries `paErrorCode`, `rejectionReason` and
+  `rejectionCategory` on invoice and credit note events, `null` outside a
+  rejection.
+- `Payment.fr212` (`PaymentCollectionStatus`): where the fr:212 « Encaissée »
+  status of a payment stands on the platform (`state`, `sentAt`,
+  `lastErrorCode`, `lastErrorReason`, `updatedAt`).
+
 ## [2.5.0] - 2026-09-06
 
 ### Fixed

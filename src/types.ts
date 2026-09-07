@@ -273,6 +273,23 @@ export interface InvoiceSubmissionArtefact {
  * resent under the same number opens a new attempt whose identifiers are the
  * live ones on `InvoiceEinvoicing`.
  */
+/**
+ * What a platform rejection or refusal means, read once by the server from the
+ * code and the reason. `buyer_not_in_directory` is the one to route on: the
+ * directory found no active receiving address for the buyer, so no platform
+ * can deliver the document yet. It says nothing about the document's content.
+ */
+export type PaRejectionCategory =
+  | 'buyer_not_in_directory'
+  | 'format_invalid'
+  | 'semantic_error'
+  | 'duplicate'
+  | 'platform_auth'
+  | 'platform_unavailable'
+  | 'refused_by_buyer'
+  | 'suspended'
+  | 'unknown'
+
 export interface InvoicePreviousSubmission {
   paId: string | null
   paTransactionId: string | null
@@ -281,6 +298,7 @@ export interface InvoicePreviousSubmission {
   paStatusCode: string | null
   paErrorCode: string | null
   rejectionReason: string | null
+  rejectionCategory?: PaRejectionCategory | null
   sentAt: string | null
   /** When the next attempt was opened. */
   closedAt: string
@@ -295,6 +313,8 @@ export interface InvoiceEinvoicing {
   paErrorCode: string | null
   /** Platform's reason for a rejection (`rejected`), whatever channel it arrived through. */
   rejectionReason?: string | null
+  /** The server's reading of that rejection; null once a new attempt is opened. */
+  rejectionCategory?: PaRejectionCategory | null
   /** Buyer's reason for a refusal (`refused`). */
   refusalReason?: string | null
   paIdempotencyKey: string | null
@@ -600,6 +620,16 @@ export interface PaymentTokenResponse {
 // Payment (sub-resource of Invoice)
 // ---------------------------------------------------------------------------
 
+/** Where the collection status (fr:212 « Encaissée ») of a payment stands on the platform. */
+export interface PaymentCollectionStatus {
+  state: 'pending' | 'awaiting_deposit' | 'sent' | 'blocked' | 'reconciliation_required' | 'failed'
+  sentAt: string | null
+  lastErrorCode: string | null
+  /** The platform's words when it refused the status (`lastErrorCode` `pa_lifecycle_rejected`). */
+  lastErrorReason?: string
+  updatedAt: string
+}
+
 export interface Payment {
   id: string
   object: 'payment'
@@ -609,6 +639,8 @@ export interface Payment {
   paidAt: string
   recorded_by: 'api' | 'ui'
   created: string
+  /** Present when the collection must reach the platform as an fr:212 status. */
+  fr212?: PaymentCollectionStatus | null
 }
 
 export interface PaymentCreateParams {
@@ -1088,6 +1120,10 @@ export interface WebhookEvent {
     transmissionStatus?: string
     transmissionDetail?: string | null
     paymentStatus?: string
+    /** Platform verdict on the current attempt (null when none): code, words and reading. */
+    paErrorCode?: string | null
+    rejectionReason?: string | null
+    rejectionCategory?: PaRejectionCategory | null
     metadata?: Record<string, unknown>
     relatedInvoiceId?: string | null
     [key: string]: unknown
