@@ -282,6 +282,8 @@ export interface InvoiceSubmissionArtefact {
   correctedRules: string[]
   /** Recipient address used in BT-49 of this submitted CII. */
   routingIdentifier?: string
+  /** Seller address used for BT-34 of this submission artefact. */
+  sellerRoutingIdentifier?: string
 }
 
 /**
@@ -340,6 +342,8 @@ export interface InvoiceEinvoicing {
   /** Verbatim notes supplied by the platform or buyer. */
   rejectionNote?: string | null
   routingIdentifier?: string | null
+  /** Read-only seller address resolved for BT-34 of the submitted CII. */
+  senderRoutingIdentifier?: string
   buyerReachableAt?: string | null
   directoryCheckedAt?: string | null
   ereportingPaymentId?: string | null
@@ -1228,7 +1232,8 @@ export interface WebhookEvent {
     metadata?: Record<string, unknown>
     relatedInvoiceId?: string | null
     invoiceId?: string
-    paymentId?: string
+    paymentId?: string | null
+    fr212?: PaymentCollectionStatus | null
     method?: string
     pa_invoice_id?: string
     sender_siret?: string

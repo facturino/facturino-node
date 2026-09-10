@@ -1,4 +1,4 @@
-import type { WebhookEvent } from './types.js'
+import type { PaymentCollectionStatus, WebhookEvent } from './types.js'
 /** Typed payloads selected by event type. Unknown fields remain available in the raw response. */
 export interface InvoiceWebhookData {
   id: string
@@ -78,6 +78,10 @@ export interface PaymentCreatedWebhookData {
 }
 
 export interface PaymentReceivedWebhookData {
+  /** Null when an older/aggregated ledger change cannot be attributed. */
+  paymentId?: string | null
+  /** Collection state at publication; read the payment for its current state. */
+  fr212?: PaymentCollectionStatus | null
   id: string
   object: "invoice"
   status?: string
