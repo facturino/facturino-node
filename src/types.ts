@@ -813,8 +813,15 @@ export interface CustomerLookupParams {
   query?: string
 }
 
-/** Company details resolved from the INSEE Sirene registry (not a stored customer). */
+/** Explains protected registry fields without certifying customer identity. */
+export interface RegistryDisclosure {
+  status: 'O' | 'P' | 'N' | null
+  withheldFields: string[]
+}
+
+/** Company details resolved from Sirene, not a stored customer. */
 export interface SireneCompany {
+  disclosure?: RegistryDisclosure
   name: string
   siret: string
   siren: string

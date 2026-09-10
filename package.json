@@ -1,6 +1,6 @@
 {
   "name": "@facturino/node",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Official Node.js SDK for the Facturino API \u2014 French e-invoicing made simple",
   "license": "MIT",
   "author": "Facturino <dev@facturino.com>",

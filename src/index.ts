@@ -161,6 +161,7 @@ export type {
   CustomerLookupParams,
   SireneLookupResponse,
   SireneCompany,
+  RegistryDisclosure,
   Product,
   PriceHistoryEntry,
   ProductCreateParams,
