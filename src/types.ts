@@ -3,6 +3,10 @@
 // ---------------------------------------------------------------------------
 
 export interface FacturinoConfig {
+  /** Generate one stable key per POST call (default: true). Unkeyed POSTs never retry. */
+  autoIdempotency?: boolean
+  /** Maximum cumulative retry waiting time in ms (default: 60000). A longer Retry-After returns the 429 unchanged. */
+  retryBudgetMs?: number
   /** API base URL. Defaults to https://facturino.com/api */
   baseUrl?: string
   /** Max retries on 429/5xx (default: 3). */
@@ -98,6 +102,9 @@ export type ContactRole = 'billing' | 'technical' | 'main'
 // pourcent (e.g. 15000 = 150,00 EUR, 2000 = 20,00 %) — same unit as on input.
 // `quantity` is a decimal-string count, not an amount.
 export interface LineItem {
+  priceMode?: 'tax_exclusive' | 'tax_inclusive'
+  kind?: 'goods' | 'service'
+  taxLineRef?: string
   id: string
   description: string
   quantity: string
@@ -140,10 +147,17 @@ export interface CustomerSnapshot {
   name: string
   siret?: string
   vatNumber?: string
-  address: Address
+  address?: Address
+  type?: 'individual' | 'company'
+  email?: string
+  deliveryAddress?: Address
+  contacts?: Contact[]
+  paIdentifier?: string
 }
 
 export interface LifecycleEntry {
+  code?: string
+  params?: Record<string, string | number>
   status: string
   timestamp: string
   source: 'user' | 'system' | 'pa'
@@ -232,10 +246,10 @@ export type InvoiceStatus =
 export interface InvoiceDates {
   issued: string
   due: string
-  serviceStart: string | null
-  serviceEnd: string | null
-  finalizedAt: string | null
-  sentAt: string | null
+  serviceStart?: string | null
+  serviceEnd?: string | null
+  finalizedAt?: string | null
+  sentAt?: string | null
   /**
    * Actual settlement date: the `paidAt` of the payment that cleared the
    * balance. Absent or `null` while a balance remains, cleared again when a
@@ -266,6 +280,8 @@ export interface InvoiceSubmissionArtefact {
   generatedAt: string
   /** Rules the regeneration satisfied (e.g. `BR-FR-08`). */
   correctedRules: string[]
+  /** Recipient address used in BT-49 of this submitted CII. */
+  routingIdentifier?: string
 }
 
 /**
@@ -281,6 +297,8 @@ export interface InvoiceSubmissionArtefact {
  */
 export type PaRejectionCategory =
   | 'buyer_not_in_directory'
+  | 'addressing_error'
+  | 'other'
   | 'format_invalid'
   | 'semantic_error'
   | 'duplicate'
@@ -290,6 +308,15 @@ export type PaRejectionCategory =
   | 'suspended'
   | 'unknown'
 
+export type PaRejectionSource = 'platform' | 'buyer' | 'facturino'
+
+export interface BuyerNatureWarning {
+  code: 'buyer_nature_suspect'
+  /** English API explanation; creation is still allowed. */
+  message: string
+  param: string
+}
+
 export interface InvoicePreviousSubmission {
   paId: string | null
   paTransactionId: string | null
@@ -298,6 +325,9 @@ export interface InvoicePreviousSubmission {
   paStatusCode: string | null
   paErrorCode: string | null
   rejectionReason: string | null
+  rejectionCode?: string | null
+  rejectionSource?: PaRejectionSource | null
+  rejectionNote?: string | null
   rejectionCategory?: PaRejectionCategory | null
   sentAt: string | null
   /** When the next attempt was opened. */
@@ -305,6 +335,14 @@ export interface InvoicePreviousSubmission {
 }
 
 export interface InvoiceEinvoicing {
+  rejectionCode?: string | null
+  rejectionSource?: PaRejectionSource | null
+  /** Verbatim notes supplied by the platform or buyer. */
+  rejectionNote?: string | null
+  routingIdentifier?: string | null
+  buyerReachableAt?: string | null
+  directoryCheckedAt?: string | null
+  ereportingPaymentId?: string | null
   paId: string | null
   paStatus: string | null
   /** Raw platform status code (e.g. `fr:200`). */
@@ -349,6 +387,13 @@ export interface InvoiceFiles {
 }
 
 export interface Invoice {
+  deposits?: unknown[]
+  paymentSchedule?: unknown[]
+  purchaseOrderNumber?: string | null
+  reminderTaskIds?: unknown[]
+  processed?: boolean
+  anonymized?: boolean
+  anonymizedAt?: string | null
   id: string
   object: 'invoice'
   type: InvoiceType
@@ -637,8 +682,15 @@ export interface Payment {
   method: PaymentMethod | 'other'
   reference: string | null
   paidAt: string
-  recorded_by: 'api' | 'ui'
+  recorded_by: 'api' | 'app' | 'system'
   created: string
+  companyId?: string
+  invoiceId?: string
+  livemode?: boolean
+  creditNoteId?: string
+  cancelledAt?: string
+  type?: 'payment' | 'refund'
+  status?: 'cancelled' | null
   /** Present when the collection must reach the platform as an fr:212 status. */
   fr212?: PaymentCollectionStatus | null
 }
@@ -677,6 +729,8 @@ export interface PaymentCancelResult {
 // ---------------------------------------------------------------------------
 
 export interface Customer {
+  companyId?: string
+  warnings?: BuyerNatureWarning[]
   id: string
   object: 'customer'
   name: string
@@ -937,7 +991,27 @@ export type CreditNoteReasonCode =
   | 'quality'
   | 'other'
 
+export interface CreditNoteEinvoicing {
+  paId: string | null
+  paStatus: string | null
+  depositedAt: string | null
+  paIdempotencyKey?: string
+  paErrorCode?: string | null
+  paStatusCode?: string | null
+  rejectionReason?: string | null
+  rejectionCategory?: PaRejectionCategory | null
+  rejectionCode?: string | null
+  rejectionSource?: PaRejectionSource | null
+  rejectionNote?: string | null
+  previousSubmissions?: InvoicePreviousSubmission[]
+  ereportingId?: string | null
+}
+
 export interface CreditNote {
+  companyId?: string
+  lifecycle?: unknown[]
+  processed?: boolean
+  relatedInvoiceNumber?: string | null
   id: string
   object: 'credit_note'
   customer: CustomerRef
@@ -970,7 +1044,7 @@ export interface CreditNote {
   items: LineItem[]
   totals: Totals
   dates: { issued: string; finalizedAt?: string; sentAt?: string }
-  einvoicing?: { paId: string | null; paStatus: string | null; depositedAt: string | null }
+  einvoicing?: CreditNoteEinvoicing
   files?: { pdfPath?: string; facturxPath?: string }
   notes?: string
   archive: { hash: string | null; previousHash: string | null; archivedAt: string | null } | null
@@ -1088,6 +1162,7 @@ export type WebhookEventType =
   | 'subscription.created'
   | 'subscription.cancelled'
   | 'subscription.renewed'
+  | 'subscription.paused'
 
 /** Answer of `POST /v1/events/{id}/retry`: a scheduling receipt, not the event. */
 export interface EventRetryResult {
@@ -1096,6 +1171,22 @@ export interface EventRetryResult {
   retryScheduled: boolean
   /** Present when the replay targets one endpoint. */
   endpointId?: string
+}
+
+export interface WebhookAttempt {
+  timestamp: string
+  httpStatus: number | null
+  error?: string
+  duration?: number
+  endpointId?: string
+}
+
+export interface EndpointDelivery {
+  attemptCount?: number
+  generation?: number
+  delivered: boolean
+  attempts: WebhookAttempt[]
+  nextRetry: string | null
 }
 
 export interface WebhookEvent {
@@ -1110,8 +1201,10 @@ export interface WebhookEvent {
    * total_due (invoice total, historical name) and amountDue.
    */
   data: {
-    id: string
-    object: string
+    paStatus?: string
+    paInvoiceId?: string | null
+    id?: string
+    object?: string
     status?: string
     previous_status?: string
     livemode?: boolean
@@ -1124,18 +1217,52 @@ export interface WebhookEvent {
     paErrorCode?: string | null
     rejectionReason?: string | null
     rejectionCategory?: PaRejectionCategory | null
+    rejectionCode?: string | null
+    rejectionSource?: PaRejectionSource | null
+    relatedInvoiceNumber?: string | null
+    amount?: string
+    total_paid?: string
+    total_due?: string
+    total?: string
+    amountDue?: string
     metadata?: Record<string, unknown>
     relatedInvoiceId?: string | null
+    invoiceId?: string
+    paymentId?: string
+    method?: string
+    pa_invoice_id?: string
+    sender_siret?: string
+    sender_name?: string
+    total_ht?: string
+    total_tva?: string
+    total_ttc?: string
+    recurringInvoiceId?: string
+    error?: string
+    count?: number
+    plan?: string
+    stripeSubscriptionId?: string
+    reason?: string
+    attempt?: number
+    pausedUntil?: string | null
+    period?: string | null
+    type?: string | null
     [key: string]: unknown
   }
   request?: {
     id?: string
     idempotencyKey?: string
-  }
-  delivered: boolean
+  } | null
+  /** REST delivery record fields; absent from the signed webhook body. */
+  companyId?: string
+  endpointId?: string
+  attempts?: WebhookAttempt[]
+  nextRetry?: string | null
+  deliveries?: Record<string, EndpointDelivery>
+  expireAt?: string
+  delivered?: boolean
   livemode: boolean
   created: string
-  updated: string
+  updated?: string
 }
 
 export interface EventListParams extends PaginationParams {
@@ -2657,6 +2784,7 @@ export interface TaxDecisionVatBreakdownEntry {
  * deleted — request a new one, optionally with `retryOfTaxDecisionId`.
  */
 export interface TaxDecision {
+  warnings?: BuyerNatureWarning[]
   id: string
   object: 'tax_decision'
   companyId: string
@@ -2766,13 +2894,21 @@ export interface DecisionBackedLineParam {
 
 /** The frozen fiscal position copied onto a document. */
 export interface TaxSnapshot {
+  decidedAt?: string
+  expiresAt?: string
+  roundingPolicy?: string
+  operationFingerprint?: string
+  seller?: Record<string, unknown>
+  buyer?: Record<string, unknown>
+  foreignTaxReviewRequired?: boolean
+  euB2cDestination?: Record<string, unknown> | null
   taxDecisionId: string
   /** Fiscal source of the decision, frozen with it. */
   taxSource?: TaxSource
   priceMode: PriceMode
   currency: string
   rulesVersion?: string
-  reportingCalendar?: string
+  reportingCalendar?: string | null
   effectiveAt?: string
   invoiceChannel?: InvoiceChannel | null
   transactionReporting?: TransactionReporting | null

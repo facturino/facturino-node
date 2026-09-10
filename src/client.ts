@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { FacturinoConfig, ApiErrorBody, RequestOptions } from './types.js'
 import {
   ApiError,
@@ -22,7 +23,7 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503])
 const INITIAL_RETRY_DELAY_MS = 500
 const MAX_RETRY_DELAY_MS = 30_000
 
-export const VERSION = '2.6.0'
+export const VERSION = '2.7.0'
 
 /** HTTP client with retries, exponential backoff, and structured errors. */
 export class HttpClient {
@@ -31,6 +32,8 @@ export class HttpClient {
   private readonly maxRetries: number
   private readonly timeout: number
   private readonly apiVersion: string
+  private readonly autoIdempotency: boolean
+  private readonly retryBudgetMs: number
 
   constructor(apiKey: string, config: FacturinoConfig = {}) {
     if (!apiKey) {
@@ -50,6 +53,9 @@ export class HttpClient {
     this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT
     this.apiVersion = config.apiVersion ?? DEFAULT_API_VERSION
+    this.autoIdempotency = config.autoIdempotency ?? true
+    this.retryBudgetMs = config.retryBudgetMs ?? 60_000
+    if (!Number.isFinite(this.retryBudgetMs) || this.retryBudgetMs < 0) throw new Error('retryBudgetMs must be finite and non-negative')
   }
 
   async request<T>(
@@ -58,6 +64,7 @@ export class HttpClient {
     body?: unknown,
     options?: RequestOptions,
   ): Promise<T> {
+    method = method.toUpperCase()
     const url = `${this.baseUrl}${path}`
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${this.apiKey}`,
@@ -67,18 +74,24 @@ export class HttpClient {
       'User-Agent': `facturino-node/${VERSION}`,
     }
 
-    if (options?.idempotencyKey) {
-      headers['Idempotency-Key'] = options.idempotencyKey
-    }
+    const key = options?.idempotencyKey ?? (method === 'POST' && this.autoIdempotency ? randomUUID() : undefined)
+    if (key) headers['Idempotency-Key'] = key
+    const canRetry = method !== 'POST' || Boolean(key)
+    const serializedBody = body !== undefined && method !== 'GET' ? JSON.stringify(body) : undefined
+    let remainingBudget = this.retryBudgetMs
 
     let lastError: Error | null = null
+    let retryAfterMs: number | null = null
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (attempt > 0) {
-        const delay = this.getRetryDelay(attempt, lastError)
+        const delay = retryAfterMs ?? this.getRetryDelay(attempt, lastError)
+        if (delay > remainingBudget) throw lastError
+        remainingBudget -= delay
         await sleep(delay)
       }
 
+      retryAfterMs = null
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), this.timeout)
 
@@ -90,13 +103,13 @@ export class HttpClient {
         }
 
         if (body !== undefined && method !== 'GET') {
-          fetchOptions.body = JSON.stringify(body)
+          fetchOptions.body = serializedBody
         }
 
         const response = await fetch(url, fetchOptions)
 
-        clearTimeout(timeoutId)
-
+        const seconds = parseRetryAfter(response.headers.get('retry-after'))
+        retryAfterMs = seconds === null ? null : seconds * 1000
         if (response.status === 204) {
           return undefined as T
         }
@@ -135,14 +148,12 @@ export class HttpClient {
           lastError = this.buildError(response.status, errorBody, response.headers)
         }
 
-        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+        if (RETRYABLE_STATUS_CODES.has(response.status) && canRetry && attempt < this.maxRetries) {
           continue
         }
 
         throw lastError
       } catch (err) {
-        clearTimeout(timeoutId)
-
         if (err instanceof ApiError) {
           throw err
         }
@@ -151,23 +162,25 @@ export class HttpClient {
           lastError = new ConnectionError(
             `Request to ${method} ${path} timed out after ${this.timeout}ms`
           )
-          if (attempt < this.maxRetries) {
+          if (canRetry && attempt < this.maxRetries) {
             continue
           }
           throw lastError
         }
 
-        if (err instanceof TypeError && (err.message.includes('fetch') || err.message.includes('network'))) {
+        if (err instanceof TypeError && /fetch|network|terminated/i.test(err.message)) {
           lastError = new ConnectionError(
             `Network error on ${method} ${path}: ${err.message}`
           )
-          if (attempt < this.maxRetries) {
+          if (canRetry && attempt < this.maxRetries) {
             continue
           }
           throw lastError
         }
 
         throw err
+      } finally {
+        clearTimeout(timeoutId)
       }
     }
 
@@ -220,9 +233,7 @@ export class HttpClient {
       case 422:
         return new ValidationError(status, body)
       case 429: {
-        const retryAfterHeader = headers.get('retry-after')
-        const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null
-        return new RateLimitError(status, body, Number.isNaN(retryAfter) ? null : retryAfter)
+        return new RateLimitError(status, body, parseRetryAfter(headers.get('retry-after')))
       }
       case 500:
       case 502:
@@ -247,7 +258,7 @@ export class HttpClient {
 
   private getRetryDelay(attempt: number, lastError: Error | null): number {
     if (lastError instanceof RateLimitError && lastError.retryAfter !== null) {
-      return Math.min(lastError.retryAfter * 1000, MAX_RETRY_DELAY_MS)
+      return lastError.retryAfter * 1000
     }
 
     const baseDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1)
@@ -258,4 +269,12 @@ export class HttpClient {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (value === null || !value.trim()) return null
+  const numeric = Number(value)
+  if (Number.isFinite(numeric)) return numeric >= 0 ? numeric : null
+  const seconds = Math.max(0, (Date.parse(value) - Date.now()) / 1000)
+  return Number.isFinite(seconds) ? seconds : null
 }

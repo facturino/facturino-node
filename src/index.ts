@@ -118,6 +118,13 @@ export type {
   InvoiceDates,
   InvoicePaymentTerms,
   InvoiceEinvoicing,
+  PaRejectionSource,
+  PaRejectionCategory,
+  PaymentCollectionStatus,
+  WebhookAttempt,
+  EndpointDelivery,
+  BuyerNatureWarning,
+  CreditNoteEinvoicing,
   InvoiceSubmissionArtefact,
   InvoicePreviousSubmission,
   InvoicePortal,
@@ -322,3 +329,5 @@ export {
 
 export { Webhooks } from './webhooks.js'
 export { AutoPaginatingList } from './pagination.js'
+
+export type * from './eventData.js'
