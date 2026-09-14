@@ -1,6 +1,7 @@
-import type { PaymentCollectionStatus, WebhookEvent } from './types.js'
+import type { ObligationFollowUp, PaymentCollectionStatus, WebhookEvent } from './types.js'
 /** Typed payloads selected by event type. Unknown fields remain available in the raw response. */
 export interface InvoiceWebhookData {
+  obligation?: ObligationFollowUp | null
   id: string
   object: "invoice"
   status: string
@@ -42,6 +43,7 @@ export interface QuoteWebhookData {
 }
 
 export interface CreditNoteWebhookData {
+  obligation?: ObligationFollowUp | null
   paStatus?: string
   paInvoiceId?: string | null
   id: string
@@ -78,9 +80,8 @@ export interface PaymentCreatedWebhookData {
 }
 
 export interface PaymentReceivedWebhookData {
-  /** Null when an older/aggregated ledger change cannot be attributed. */
+  obligation?: ObligationFollowUp | null
   paymentId?: string | null
-  /** Collection state at publication; read the payment for its current state. */
   fr212?: PaymentCollectionStatus | null
   id: string
   object: "invoice"
@@ -105,7 +106,20 @@ export interface PaymentReceivedWebhookData {
   amountDue?: string
 }
 
+export interface ObligationWebhookData {
+  id: string
+  object: 'invoice' | 'credit_note' | 'payment' | 'ereporting'
+  status?: string
+  obligation: ObligationFollowUp
+  reason: string | null
+  invoiceId?: string
+  fr212?: PaymentCollectionStatus | null
+}
+
 export interface EreportingWebhookData {
+  obligation?: ObligationFollowUp | null
+  paRejectionCode?: string | null
+  paRejectionReason?: string | null
   id: string
   object: "ereporting"
   status: string
@@ -178,6 +192,12 @@ export interface EventDataMap {
   "payment.created": PaymentCreatedWebhookData
   "payment.received": PaymentReceivedWebhookData
   "ereporting.submitted": EreportingWebhookData
+  "ereporting.accepted": EreportingWebhookData
+  "ereporting.rejected": EreportingWebhookData
+  "ereporting.obligation_updated": ObligationWebhookData
+  "invoice.obligation_updated": ObligationWebhookData
+  "credit_note.obligation_updated": ObligationWebhookData
+  "payment.obligation_updated": ObligationWebhookData
   "recurring_invoice.generated": RecurringGeneratedWebhookData
   "recurring_invoice.failed": RecurringFailedWebhookData
   "export.ready": ExportWebhookData

@@ -93,6 +93,8 @@ export default Facturino
 export { Facturino }
 
 export type {
+  ObligationFollowUp,
+  EReportingBlock,
   FacturinoConfig,
   RequestOptions,
   PaginationParams,

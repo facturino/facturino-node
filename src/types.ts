@@ -1,3 +1,23 @@
+export interface EReportingBlock {
+  volet?: 'transaction' | 'payment'
+  code: string
+  remedy?: string
+  obligation?: ObligationFollowUp | null
+  periodStart?: string
+  periodEnd?: string
+  updated?: string
+}
+
+/** Read-only operational follow-up, distinct from accounting and fiscal outcomes. */
+export interface ObligationFollowUp {
+  state: 'pending' | 'processing' | 'waiting' | 'reconciling' | 'attention_required' | 'completed'
+  reasonCode: string | null
+  reasonSource: 'platform' | 'buyer' | 'facturino' | null
+  owner: 'facturino' | 'customer' | null
+  action: 'submit' | 'follow_status' | 'retry' | 'reconcile' | 'watch_directory' | 'investigate' | 'correct_source' | 'review_buyer_refusal' | 'connect_platform' | null
+  nextAttemptAt: string | null
+}
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -337,6 +357,8 @@ export interface InvoicePreviousSubmission {
 }
 
 export interface InvoiceEinvoicing {
+  /** Read-only follow-up; absent on historical responses. */
+  obligation?: ObligationFollowUp | null
   rejectionCode?: string | null
   rejectionSource?: PaRejectionSource | null
   /** Verbatim notes supplied by the platform or buyer. */
@@ -391,6 +413,7 @@ export interface InvoiceFiles {
 }
 
 export interface Invoice {
+  ereportingBlock?: EReportingBlock | null
   deposits?: unknown[]
   paymentSchedule?: unknown[]
   purchaseOrderNumber?: string | null
@@ -671,6 +694,8 @@ export interface PaymentTokenResponse {
 
 /** Where the collection status (fr:212 « Encaissée ») of a payment stands on the platform. */
 export interface PaymentCollectionStatus {
+  /** Read-only follow-up; absent on historical responses. */
+  obligation?: ObligationFollowUp | null
   state: 'pending' | 'awaiting_deposit' | 'sent' | 'blocked' | 'reconciliation_required' | 'failed'
   sentAt: string | null
   lastErrorCode: string | null
@@ -680,6 +705,7 @@ export interface PaymentCollectionStatus {
 }
 
 export interface Payment {
+  reportingFollowUp?: ObligationFollowUp | null
   id: string
   object: 'payment'
   amount: number // integer centimes
@@ -1003,6 +1029,12 @@ export type CreditNoteReasonCode =
   | 'other'
 
 export interface CreditNoteEinvoicing {
+  routingIdentifier?: string | null
+  senderRoutingIdentifier?: string | null
+  buyerReachableAt?: string | null
+  directoryCheckedAt?: string | null
+  /** Read-only follow-up; absent on historical responses. */
+  obligation?: ObligationFollowUp | null
   paId: string | null
   paStatus: string | null
   depositedAt: string | null
@@ -1019,6 +1051,7 @@ export interface CreditNoteEinvoicing {
 }
 
 export interface CreditNote {
+  ereportingBlock?: EReportingBlock | null
   companyId?: string
   lifecycle?: unknown[]
   processed?: boolean
@@ -1164,6 +1197,10 @@ export type WebhookEventType =
   | 'payment.updated'
   | 'payment.received'
   | 'payment.reconciled'
+  | 'invoice.obligation_updated'
+  | 'credit_note.obligation_updated'
+  | 'payment.obligation_updated'
+  | 'ereporting.obligation_updated'
   | 'ereporting.submitted'
   | 'ereporting.accepted'
   | 'ereporting.rejected'
@@ -1212,6 +1249,9 @@ export interface WebhookEvent {
    * total_due (invoice total, historical name) and amountDue.
    */
   data: {
+    obligation?: ObligationFollowUp | null
+    paRejectionCode?: string | null
+    paRejectionReason?: string | null
     paStatus?: string
     paInvoiceId?: string | null
     id?: string
@@ -1253,7 +1293,7 @@ export interface WebhookEvent {
     count?: number
     plan?: string
     stripeSubscriptionId?: string
-    reason?: string
+    reason?: string | null
     attempt?: number
     pausedUntil?: string | null
     period?: string | null
@@ -1536,6 +1576,7 @@ export type EReportingState =
   | 'accepted' | 'rejected' | 'blocked' | 'reconciliation_required'
 export type EReportingVolet = 'transaction' | 'payment'
 export type EReportingBlockedReason =
+  | (string & {})
   | 'pa_not_supported' | 'ereporting_not_enabled' | 'tax_decision_required' | 'tax_snapshot_inconsistent'
 /** UNTDID 5305 VAT category decided for the line. */
 export type EReportingVatCategoryCode = 'S' | 'Z' | 'E' | 'AE' | 'K' | 'G' | 'O'
@@ -1579,6 +1620,9 @@ export interface EReportingLine {
 export interface EReportingLineResponse extends EReportingLine {}
 
 export interface EReporting {
+  paRejectionCode?: string | null
+  /** Read-only follow-up; absent on historical responses. */
+  obligation?: ObligationFollowUp | null
   id: string
   object: 'ereporting'
   /** Summary derived from `state` — never an authority of its own. */
