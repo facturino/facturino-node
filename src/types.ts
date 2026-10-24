@@ -2217,8 +2217,11 @@ export interface TaxDecisionLineParam {
   /** Stable caller-side reference, echoed on the decided line. */
   reference: string
   description: string
-  /** Required on every `POST /v1/tax-decisions` line. */
-  category: SupplyCategory
+  /**
+   * Required on every `POST /v1/tax-decisions` line. Open string: a value read
+   * from a quote or draft line can be passed back as is; the API validates it.
+   */
+  category: SupplyCategory | (string & {})
   /** Required when `category` is `deposit` or `ancillary_costs`. */
   relatedCategory?: PrimarySupplyCategory
   rateCategory: RateCategory
@@ -2314,8 +2317,11 @@ export interface IntegrationTaxDecisionLineParam {
   /** Stable caller-side reference, echoed on the decided line. */
   reference: string
   description: string
-  /** Required on every `POST /v1/tax-decisions` line. */
-  category: SupplyCategory
+  /**
+   * Required on every `POST /v1/tax-decisions` line. Open string: a value read
+   * from a quote or draft line can be passed back as is; the API validates it.
+   */
+  category: SupplyCategory | (string & {})
   /** Required when `category` is `deposit` or `ancillary_costs`. */
   relatedCategory?: PrimarySupplyCategory
   /**

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/) and
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-10-25
+
+### Fixed
+- `TaxDecisionLineParam.category` and `IntegrationTaxDecisionLineParam.category` accept the open-string supply category returned on quote and draft lines, so a declared value read from a response can be passed back without a cast. A draft line whose `supplyCategory` is absent still has no nature to send: declare it on the quote line.
+
 ## [2.11.0] - 2026-10-24
 
 ### Added
