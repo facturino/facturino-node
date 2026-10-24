@@ -558,6 +558,35 @@ describe('TaxDecisions resource', () => {
     expect(body.lines[0].goodsMovement).toBe('dispatched_to_buyer_territory')
   })
 
+  it('sends the territoriality rule and the declared place of an integration line', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, finalDecision))
+
+    await facturino.taxDecisions.create({
+      taxSource: 'integration',
+      customerId: 'cus_8f2k4m9n',
+      effectiveAt: '2026-09-15',
+      currency: 'eur',
+      priceMode: 'tax_exclusive',
+      lines: [{
+        reference: 'line-1',
+        description: 'Prestation',
+        category: 'services',
+        placeOfSupplyRule: 'general',
+        placeOfSupply: 'FR-MET',
+        unitAmount: 2900,
+        quantity: '1',
+        vatRate: 2000,
+        vatCode: 'S',
+      }],
+    }, { idempotencyKey: 'order-rule' })
+
+    const body = JSON.parse(lastRequest().init.body as string) as {
+      lines: Array<{ placeOfSupplyRule?: string; placeOfSupply?: string }>
+    }
+    expect(body.lines[0].placeOfSupplyRule).toBe('general')
+    expect(body.lines[0].placeOfSupply).toBe('FR-MET')
+  })
+
   it('retries a pending decision with new evidence', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(201, {
       ...finalDecision,

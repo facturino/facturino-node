@@ -123,7 +123,10 @@ export type ContactRole = 'billing' | 'technical' | 'main'
 // `quantity` is a decimal-string count, not an amount.
 export interface LineItem {
   priceMode?: 'tax_exclusive' | 'tax_inclusive'
+  /** Document classification; derived from the decided category on a decided line. */
   kind?: 'goods' | 'service'
+  /** Declared fiscal category, copied from a quote to its draft invoice; open string, absent when undeclared. */
+  supplyCategory?: SupplyCategory | (string & {})
   taxLineRef?: string
   id: string
   description: string
@@ -136,6 +139,8 @@ export interface LineItem {
   vatCode: VatCode
   vatexCode?: VatexCode
   vatAmount: number
+  /** Saint-Martin TGCA, included in `lineTotal` separately from VAT; may be absent. */
+  localTax?: LocalTax
   lineTotal: number
   product: string | null
 }
@@ -148,11 +153,32 @@ export interface VatBreakdown {
   amount: number
 }
 
+/**
+ * Saint-Martin TGCA on a line, separate from French VAT under both sources.
+ * A registration in force gives 4%; a declared exemption gives 0 with its
+ * mention. Without either, `com_taaf_supplier_local_tax_liable` stays pending.
+ * Included in line totals, `totalTTC` and the amount to collect.
+ */
+export interface LocalTax {
+  /** Open code; currently `tgca_mf`. Accept future codes. */
+  code: string
+  /** Integer centipercent (400 = 4.00 %, 0 on an exempt line). */
+  rateCentipercent: number
+  /** Integer cents, rounded ROUND_HALF_UP on the line's VAT-exclusive amount. */
+  amount: number
+  /** Seller registration reference, or the declared exemption reason. */
+  reference: string
+  /** Open exemption reason, or `null` when no exemption applies. */
+  exemption: string | null
+}
+
 export interface Totals {
   totalHT: number
   discountAmount: number
   vatBreakdown: VatBreakdown[]
   totalVAT: number
+  /** Local tax in integer cents, included in `totalTTC` and `amountDue`; may be absent. */
+  totalLocalTax?: number
   totalTTC: number
   amountDue: number
   amountPaid: number
@@ -214,6 +240,11 @@ export type VatCode =
  * basis differs from the category default (e.g. Qualiopi training, margin
  * scheme, Corsica/DOM, BTP reverse charge) — otherwise the category default
  * applies (category E defaults to the 293 B franchise mention).
+ *
+ * Accepts the official CIUS-FR list (88 codes) and future string codes; the
+ * literals below remain editor hints. Legacy spellings `VATEX-FR-261` and
+ * `VATEX-FR-AUTOLIQ` are stored and returned as `VATEX-FR-CGI261-4` and
+ * `VATEX-FR-AE`, respectively.
  */
 export type VatexCode =
   | 'VATEX-EU-AE'
@@ -226,6 +257,7 @@ export type VatexCode =
   | 'VATEX-FR-CNWVAT'
   | 'VATEX-FR-AUTOLIQ'
   | 'VATEX-FR-261'
+  | (string & {})
 
 export type PaymentMethod =
   | 'transfer'
@@ -441,7 +473,7 @@ export interface Invoice {
   taxSource?: TaxSource | null
   /** The decision this invoice is backed by, when it has one. */
   taxDecisionId?: string
-  /** The frozen fiscal position, copied from the decision. */
+  /** The final decision's frozen fiscal position, including its notices. */
   taxSnapshot?: TaxSnapshot
   /**
    * The operation a COMMERCIAL draft states, before any decision — typically a
@@ -593,6 +625,15 @@ export interface InvoiceLineItemParam {
   vatexCode?: VatexCode
   discountPercent?: number
   product?: string | null
+  /** Document classification, distinct from the fiscal category; inferred from the unit when absent. */
+  kind?: 'goods' | 'service'
+  /**
+   * Declared fiscal category; open string, copied unchanged on quote conversion.
+   * Absent means undeclared. A service is read under both `services` and
+   * `electronically_supplied_services`; only the same complete tax result
+   * permits a final decision. See {@link TaxDecisionLine.category}.
+   */
+  supplyCategory?: SupplyCategory | (string & {})
 }
 
 /**
@@ -772,6 +813,8 @@ export interface Customer {
   address: Address
   deliveryAddress?: Address
   type: 'company' | 'individual'
+  /** Declared taxable status; optional independently of the customer type. */
+  taxStatus?: 'taxable' | 'non_taxable'
   contacts?: Contact[]
   paymentTerms?: number
   tags?: string[]
@@ -793,6 +836,8 @@ export interface Customer {
 export interface CustomerCreateParams {
   name: string
   type: 'company' | 'individual'
+  /** Declared taxable status; optional independently of the customer type. */
+  taxStatus?: 'taxable' | 'non_taxable'
   address: Address
   email?: string
   siret?: string
@@ -814,6 +859,8 @@ export interface CustomerCreateParams {
 export interface CustomerUpdateParams {
   name?: string
   type?: 'company' | 'individual'
+  /** Declared taxable status; optional independently of the customer type. */
+  taxStatus?: 'taxable' | 'non_taxable'
   address?: Address
   email?: string
   siret?: string
@@ -883,9 +930,15 @@ export interface Product {
   description?: string
   reference?: string
   category?: string
+  /** Document classification, distinct from the fiscal category; absent on older products. */
+  kind?: 'goods' | 'service'
+  /** Declared fiscal category, stored and returned unchanged; open string, absent when undeclared. */
+  supplyCategory?: SupplyCategory | (string & {})
   unitPrice: number // integer centimes
   vatRate: number // centièmes de pourcent
   vatCode: VatCode
+  /** Stored VATEX code (BT-121); normalized products return the official code. */
+  vatexCode?: VatexCode
   unit: Unit
   tags: string[]
   priceHistory: PriceHistoryEntry[]
@@ -907,10 +960,17 @@ export interface ProductCreateParams {
   unitPrice: number
   vatRate: number
   vatCode: VatCode
+  /** Optional VATEX exemption code (BT-121); legacy spellings are stored under their official codes. */
+  vatexCode?: VatexCode
   unit: Unit
   description?: string
   reference?: string
   category?: string
+  tags?: string[]
+  /** Document classification; distinct from the fiscal category. */
+  kind?: 'goods' | 'service'
+  /** Declared fiscal category; open string. If absent, declare it when requesting a decision. */
+  supplyCategory?: SupplyCategory | (string & {})
 }
 
 export interface ProductUpdateParams {
@@ -918,11 +978,18 @@ export interface ProductUpdateParams {
   unitPrice?: number
   vatRate?: number
   vatCode?: VatCode
+  /** Optional VATEX exemption code (BT-121); legacy spellings are stored under their official codes. */
+  vatexCode?: VatexCode
   unit?: Unit
   description?: string
   reference?: string
   category?: string
   active?: boolean
+  tags?: string[]
+  /** Document classification; distinct from the fiscal category. */
+  kind?: 'goods' | 'service'
+  /** Declared fiscal category; open string, stored and returned unchanged. */
+  supplyCategory?: SupplyCategory | (string & {})
 }
 
 export interface ProductListParams extends PaginationParams {
@@ -1078,7 +1145,7 @@ export interface CreditNote {
   originalInvoiceId?: string
   /** The decision the credited invoice was backed by; the credit note inherits it. */
   originalTaxDecisionId?: string
-  /** The frozen fiscal position, inherited from the credited invoice. */
+  /** The frozen fiscal position and notices inherited from the credited invoice. */
   taxSnapshot?: TaxSnapshot
   creditNoteType: CreditNoteType
   number: string | null
@@ -2086,7 +2153,8 @@ export interface CommercialDraftLine {
   quantity: string
   unit: Unit
   unitPrice: number
-  supplyCategory: SupplyCategory
+  /** Declaration copied from the quote; open string, absent when undeclared. */
+  supplyCategory?: SupplyCategory | (string & {})
   rateCategory: RateCategory
   discount?: TaxDecisionDiscount
   product?: string | null
@@ -2126,6 +2194,16 @@ export type GoodsMovement =
  *
  * On any other status `totals` and `amountToCharge` are `null`, never `0`:
  * absent is not "nothing to charge".
+ * A missing fact leaves `pending_verification`, with the fact and remedy in
+ * `issues`. An unmodelled case is `unsupported` under `facturino`; the listed
+ * unmodelled local taxes, EU special territories and non-taxable legal-person
+ * goods regime stay open under `integration`, with a notice carrying the same
+ * code and `foreignTaxReviewRequired: true`. The integrator assumes the tax.
+ * Both sources refuse category `O` mixed with any other category
+ * (`vat_category_o_split_required`, EN 16931 BR-O-11 to BR-O-14: issue two
+ * documents) and an address lacking a postal code needed to distinguish EU VAT
+ * territories (`destination_regional_scope_undetermined`: supply it).
+ * Act only on `final`; notices explain the retained result and next steps.
  */
 export type TaxDecisionStatus = 'final' | 'pending_verification' | 'unsupported'
 
@@ -2139,6 +2217,7 @@ export interface TaxDecisionLineParam {
   /** Stable caller-side reference, echoed on the decided line. */
   reference: string
   description: string
+  /** Required on every `POST /v1/tax-decisions` line. */
   category: SupplyCategory
   /** Required when `category` is `deposit` or `ancillary_costs`. */
   relatedCategory?: PrimarySupplyCategory
@@ -2151,6 +2230,8 @@ export interface TaxDecisionLineParam {
   /** Decimal quantity sent as a STRING, never a float. Up to 6 decimals. */
   quantity: string
   discount?: TaxDecisionDiscount
+  /** Open TGCA exemption reason: `cgism_253`, `not_used_in_saint_martin`; gives 0 with the mention. */
+  localTaxExemption?: string
 }
 
 /** Kind of location signal (Implementing Regulation (EU) 282/2011). */
@@ -2233,6 +2314,7 @@ export interface IntegrationTaxDecisionLineParam {
   /** Stable caller-side reference, echoed on the decided line. */
   reference: string
   description: string
+  /** Required on every `POST /v1/tax-decisions` line. */
   category: SupplyCategory
   /** Required when `category` is `deposit` or `ancillary_costs`. */
   relatedCategory?: PrimarySupplyCategory
@@ -2245,11 +2327,21 @@ export interface IntegrationTaxDecisionLineParam {
    * service.
    */
   goodsMovement?: GoodsMovement
+  /**
+   * Territoriality rule of the operation; `general` when absent, as on a
+   * `facturino` line. The declared `placeOfSupply` is checked against the place
+   * Facturino decides under this rule. A derogation the engine does not
+   * implement (immovable property, event…) makes the decision `unsupported`,
+   * exactly as under the `facturino` source: declaring it never skips that check.
+   */
+  placeOfSupplyRule?: string
   /** Unit amount in integer cents, in the request's `priceMode`. */
   unitAmount: number
   /** Decimal quantity sent as a STRING, never a float. Up to 6 decimals. */
   quantity: string
   discount?: TaxDecisionDiscount
+  /** Open TGCA exemption reason: `cgism_253`, `not_used_in_saint_martin`; gives 0 with the mention. */
+  localTaxExemption?: string
   /** Supplied VAT rate in centipercent (2000 = 20.00 %). Never corrected. */
   vatRate: number
   /** Supplied EN 16931 category code (BT-151). */
@@ -2257,13 +2349,24 @@ export interface IntegrationTaxDecisionLineParam {
   /** VATEX code (BT-121). Required for E/AE/K/G/O; refused for S/Z. */
   vatexCode?: string
   /**
-   * Declared place of supply (canonical territory id, e.g. `FR-MET`, `DE`).
+   * Declared place of supply (canonical territory id, 2 to 16 characters, e.g.
+   * `FR-MET`, `DE`).
+   *
+   * It must be the place Facturino decides on the same facts, otherwise the
+   * request is refused with `422 integration_vat_incoherent`; it feeds the
+   * obligation axes, never a VAT calculation.
    *
    * Required as soon as the buyer is established in a French overseas
    * collectivity or the TAAF (`PM`, `BL`, `MF`, `PF`, `NC`, `WF`, `TF`): the
    * place is what says whether the local tax of that collectivity is at stake,
-   * and it is never assumed. A place located in one of those seven makes the
-   * decision non-final, except the sourced New Caledonian B2B case.
+   * and it is never assumed. An operation located in one of those seven is
+   * outside the scope of French VAT: category `O` at 0. A case settled by a
+   * collectivity's text stays final under both sources (New Caledonia where the
+   * taxable buyer accounts for the tax, Saint-Barthélemy, Saint-Pierre-et-
+   * Miquelon, goods shipped to Saint-Martin). Unmodelled local taxes are final
+   * under `integration`, with a notice and `foreignTaxReviewRequired: true`;
+   * the integrator assumes the tax. Saint-Martin TGCA is decided in `localTax`
+   * under both sources. `vatRate`, `vatCode` and `vatexCode` describe French VAT.
    */
   placeOfSupply?: string
 }
@@ -2291,6 +2394,23 @@ export interface ViesResult {
   source: 'vies'
   returnedName: string | null
   consultationNumber: string | null
+}
+
+/** SIRENE legal-category consultation frozen with the decision, when due. */
+export interface TaxDecisionLegalCategory {
+  source: 'sirene'
+  /** SIREN consulted (nine digits). */
+  siren: string
+  /**
+   * Open status: `found`, `not_found` or `unavailable` today. The latter two
+   * leave `business_status_not_evidenced`, `detailCode: legal_category_unresolved`,
+   * pending; they do not establish a negative taxable status.
+   */
+  status: string
+  /** INSEE legal category returned by the registry, or `null`; open string. */
+  legalCategoryCode: string | null
+  /** Civil date `YYYY-MM-DD` of the consultation or cached response. */
+  checkedAt: string
 }
 
 /** Normalized territorial evidence kept with the decision. No raw signal is exposed. */
@@ -2323,7 +2443,14 @@ export interface NonEuBusinessEvidenceResult {
 export interface TaxDecisionLine {
   reference: string
   description: string
-  category: SupplyCategory
+  /**
+   * `null` only on a pending quote/draft line with no declared supply category
+   * (`supply_category_not_declared`), without decided amounts. A service whose
+   * `services` and `electronically_supplied_services` readings give the same
+   * complete tax result is decided as `services`, with a notice. Direct
+   * `POST /v1/tax-decisions` input always requires `category`.
+   */
+  category: SupplyCategory | null
   relatedCategory: PrimarySupplyCategory | null
   effectiveCategory: string | null
   quantity: string
@@ -2344,6 +2471,8 @@ export interface TaxDecisionLine {
   treatmentReference: string | null
   amountHT: number | null
   amountVAT: number | null
+  /** Saint-Martin TGCA under both sources, included in `amountTTC`; may be absent. */
+  localTax?: LocalTax
   amountTTC: number | null
   invoiceChannel: InvoiceChannel | null
   transactionReporting: TransactionReporting | null
@@ -2420,6 +2549,12 @@ export interface EuThresholdLedgerEntry {
    */
   id: string
   sequence: number
+  /**
+   * `reservation_released`: a reserved slice given back. Zero amounts when it
+   * was never consumed; negative amounts when a sale counted for a draft is
+   * taken back out before any issuance — the decision that replaces it counts
+   * it once.
+   */
   kind:
     | 'opening'
     | 'external_adjustment'
@@ -2798,14 +2933,52 @@ export type PaymentReporting = 'fr212' | 'ereporting' | 'none'
 export interface TaxDecisionCustomer {
   customerId: string
   name: string
+  /**
+   * Nature the decision is taken on. Unevidenced business status stays pending.
+   * Only art. 18(2), second subparagraph, of Implementing Regulation (EU)
+   * 282/2011 permits `consumer` with `declared_business_not_evidenced` and a
+   * notice: telecommunications, broadcasting and electronically supplied
+   * services to a buyer established in the EU VAT territory (Monaco included)
+   * who communicated no VAT number. A communicated but unvalidated number
+   * leaves `eu_b2b_vat_number_not_validated` pending. INSEE categories 7, 8 and
+   * 9 without `taxStatus` keep their refusal.
+   */
   nature: 'business' | 'consumer'
+  /**
+   * How the nature was established: `declared_consumer`,
+   * `declared_business_with_registration`,
+   * `declared_business_with_valid_vat_number`,
+   * `declared_business_without_identification`,
+   * `declared_business_not_evidenced` (the art. 18(2) presumption within the
+   * scope above), or `declared_non_taxable` (`taxStatus: non_taxable`). A legal
+   * person with that declared status and a VAT number is checked through VIES:
+   * a valid number makes its services follow taxable-person rules (CGI
+   * art. 259-0); VIES unreachable leaves `vies_unavailable` pending.
+   * Open string: accept future values.
+   */
   natureBasis: string
+  /**
+   * Canonical territory of the DECLARED address. When the location signals of a
+   * consumer make another territory the one retained, read it on
+   * `lines[].placeOfSupply` and in the location notice.
+   */
   territoryId: string
   territoryKind: string
   declaredCountry: string
   declaredPostalCode: string | null
   legalRegistrationId: string | null
+  /** VAT number as DECLARED on the customer record, kept for audit whatever became of it. */
   vatNumber: string | null
+  /**
+   * VAT number RETAINED by the decision: the only one the document, its
+   * electronic invoice (UBL, CII, Factur-X) and the e-reporting carry. `null`
+   * without a declared number, when the number is set aside because the national
+   * registration establishes the taxable status (notice `detailCode`
+   * `vat_number_ignored_national_registration`), or when the buyer is treated as
+   * a non-taxable person. Absent on a decision taken before this field existed,
+   * where the declared number stands for the retained one.
+   */
+  retainedVatNumber?: string | null
   crossBorderTaxableStatus: string
   businessStatusBasis: string
 }
@@ -2818,10 +2991,99 @@ export interface TaxDecisionObligationReason {
   message: string
 }
 
-/** What is missing, on a decision that is not final. */
+/** Missing fact and remedy when pending, or reason for an unsupported refusal. */
 export interface TaxDecisionIssue {
+  /**
+   * Open code. Missing facts include `business_status_not_evidenced`,
+   * `eu_b2b_vat_number_not_validated`, `non_eu_business_status_not_evidenced`,
+   * `vies_unavailable`, `location_evidence_insufficient`,
+   * `location_evidence_contradictory`, `location_evidence_relief_undetermined`,
+   * `eu_threshold_state_missing`, `goods_movement_unknown` and
+   * `com_taaf_supplier_local_tax_liable`. `supply_category_not_declared` asks
+   * for a quote/draft line's fiscal category when it cannot be decided without
+   * that declaration; the pending line has `category: null`, without amounts.
+   * An unsupported refusal includes
+   * `vat_category_o_split_required` under both sources, and under `facturino`
+   * `com_taaf_local_regime_not_sourced`, `com_taaf_local_tax_not_determined`,
+   * `com_taaf_payment_withholding_not_modelled`,
+   * `eu_special_territory_not_implemented` and
+   * `non_taxable_legal_person_goods_regime_not_modelled` (goods dispatched to
+   * another member state or XI for a non-taxable legal person with a
+   * communicated VAT number).
+   */
   code: string
+  /**
+   * A more precise, equally stable reason, when the code alone does not say
+   * what to complete. `einvoicing_buyer_registration_required`: a buyer declared
+   * as a business without a SIRET, while the electronic invoice the seller must
+   * issue requires the buyer's SIREN (CGI art. 242 nonies A).
+   * `tax_status_not_declared`: INSEE category 7, 8 or 9 (association, public
+   * body, foundation) without `taxStatus`; declare it.
+   * `legal_category_unresolved`: SIRENE could not give the category; complete
+   * the buyer's legal-form data or declare `taxStatus`.
+   * `french_vat_and_tgca_cumulation`: `com_taaf_local_regime_not_sourced` for a
+   * general service to a Saint-Martin consumer without `localTaxExemption`.
+   * Open string; absent when the code says it all.
+   */
+  detailCode?: string
   message: string
+  /** Normative reference. */
+  reference?: string
+  /** Reference of the line concerned; absent when the reason covers the whole operation. */
+  lineId?: string
+}
+
+/**
+ * What the decision retained and what the seller can do next, whatever its
+ * status. A notice never stands for a missing fact; `issues` alone lists what
+ * keeps a decision from being final. Show notices to the seller, and act only
+ * on `final`.
+ */
+export interface TaxDecisionNotice {
+  /**
+   * Open code. Examples: `business_status_not_evidenced` for the art. 18(2)
+   * presumption within its scope (see `TaxDecisionCustomer.nature`);
+   * `vat_number_territory_mismatch` or `eu_b2b_vat_number_not_validated` when
+   * national registration establishes status and the number is set aside;
+   * `location_evidence_contradictory` when two concordant items of different
+   * kinds establish the consumer territory, or every possible territory gives
+   * the same complete tax result; `destination_mechanism_missing` when
+   * destination VAT is invoiced with guidance on registration.
+   * `supply_category_not_declared`: an undeclared service was read under both
+   * `services` and `electronically_supplied_services`, with the same complete
+   * tax result; `services` was retained. Declare the category for future operations.
+   * Under `integration` only, unmodelled cases carry the same code as the
+   * refusal under `facturino`: `com_taaf_local_tax_not_determined`,
+   * `com_taaf_local_regime_not_sourced`,
+   * `com_taaf_payment_withholding_not_modelled`,
+   * `eu_special_territory_not_implemented` and
+   * `non_taxable_legal_person_goods_regime_not_modelled`. The decision is
+   * final with `foreignTaxReviewRequired: true`; the integrator assumes the
+   * tax. Treat an unknown code as a generic notice.
+   */
+  code: string
+  /**
+   * A more precise, equally stable reason, when the code alone does not say what
+   * to do. On `destination_mechanism_missing`: `threshold_exceeded` (the
+   * one-stop-shop registration period runs from the first operation above the
+   * threshold), `destination_option` or `multi_member_state_establishment` (from
+   * the first operation taxed at destination). On `vat_number_territory_mismatch`
+   * or `eu_b2b_vat_number_not_validated`: `vat_number_ignored_national_registration`
+   * (number set aside because the national registration establishes the
+   * business status: the buyer stays a business, with no VAT number on the
+   * document). On `location_evidence_contradictory`: `concordant_evidence` or
+   * `same_treatment`. On `com_taaf_local_regime_not_sourced`:
+   * `french_vat_and_tgca_cumulation` for a general service to a Saint-Martin
+   * consumer without `localTaxExemption` (`integration` only).
+   * Open string; absent when the code says it all.
+   */
+  detailCode?: string
+  /** Diagnostic message in English, free of personal data. */
+  message: string
+  /** Normative reference of the notice. */
+  reference?: string
+  /** Reference of the line concerned; absent when the notice covers the whole operation. */
+  lineId?: string
 }
 
 export interface TaxDecisionVatBreakdownEntry {
@@ -2830,6 +3092,23 @@ export interface TaxDecisionVatBreakdownEntry {
   vatexCode: string | null
   base: number
   amount: number
+}
+
+/** A seller's dated local-tax registration. */
+export interface LocalTaxRegistration {
+  /** Open territory identifier; currently `MF` (Saint-Martin). */
+  territory: string
+  reference: string
+  /** Civil date `YYYY-MM-DD`. */
+  effectiveFrom: string
+  /** Civil date `YYYY-MM-DD`, or `null` for an open-ended registration. */
+  effectiveTo: string | null
+}
+
+/** Seller profile frozen with the decision; other profile fields stay open. */
+export interface SellerTaxProfile extends Record<string, unknown> {
+  /** Local-tax registrations; absent on older profiles. */
+  localTaxRegistrations?: LocalTaxRegistration[]
 }
 
 /**
@@ -2851,7 +3130,7 @@ export interface TaxDecision {
   customer: TaxDecisionCustomer
   sellerProfileId: string
   sellerProfileRevision: number
-  sellerProfile: Record<string, unknown>
+  sellerProfile: SellerTaxProfile
   currency: string
   priceMode: PriceMode
   effectiveAt: string
@@ -2870,7 +3149,13 @@ export interface TaxDecision {
   operationFingerprint: string
   lines: TaxDecisionLine[]
   /** `null` on any status other than `final`. */
-  totals: { totalHT: number; totalVAT: number; totalTTC: number } | null
+  totals: {
+    totalHT: number
+    totalVAT: number
+    /** Local tax in integer cents, included in `totalTTC` and `amountToCharge`; may be absent. */
+    totalLocalTax?: number
+    totalTTC: number
+  } | null
   vatBreakdown: TaxDecisionVatBreakdownEntry[]
   /** Exact amount to charge, in integer cents. `null` unless the decision is final. */
   amountToCharge: number | null
@@ -2896,14 +3181,24 @@ export interface TaxDecision {
    */
   euB2cDestination: TaxDecisionEuB2cDestination | null
   /**
-   * A foreign tax may apply. Facturino decides French VAT and the matching
-   * French obligations; this case must be reviewed outside Facturino.
+   * A foreign tax may apply. Facturino decides French VAT, Saint-Martin TGCA
+   * and the matching French obligations; any unmodelled tax must be reviewed
+   * outside Facturino. Under `integration`, the integrator assumes that tax.
    */
   foreignTaxReviewRequired: boolean
   vies: ViesResult | null
+  /** Absent when no SIRENE consultation was due, including historical decisions. */
+  legalCategory?: TaxDecisionLegalCategory
   locationEvidence: LocationEvidenceResult[]
   nonEuBusinessEvidence: NonEuBusinessEvidenceResult | null
+  /** Why the decision is NOT final. Empty on a final decision. */
   issues: TaxDecisionIssue[]
+  /**
+   * What the decision retained and what the seller can do next. Always present,
+   * empty when there is nothing to report. Never stands for a missing fact.
+   * Show notices to the seller, and act only on `final`.
+   */
+  notices: TaxDecisionNotice[]
   obligationReasons: TaxDecisionObligationReason[]
   retryOfTaxDecisionId: string | null
   livemode: boolean
@@ -2970,6 +3265,12 @@ export interface TaxSnapshot {
   transactionReporting?: TransactionReporting | null
   paymentReporting?: PaymentReporting | null
   amountToChargeCents?: number
+  /**
+   * The final decision's notices, FROZEN with it: the retained result and the
+   * seller's next steps. A credit note repeats those of the invoice it credits.
+   * Empty when there was nothing to report; historical documents may omit it.
+   */
+  notices?: TaxDecisionNotice[]
   legalMentions?: string[]
   lines?: Array<Record<string, unknown>>
   totals?: Record<string, number>

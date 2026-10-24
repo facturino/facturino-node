@@ -31,7 +31,9 @@ export class TaxDecisions {
    *
    * Only a `final` decision carries amounts. On `pending_verification` or
    * `unsupported`, `totals` and `amountToCharge` are `null` — never `0` — and
-   * `issues` says what is missing.
+   * `issues` names the missing fact and remedy when pending, or explains an
+   * unsupported refusal. Notices describe the retained result and next steps;
+   * they never stand for a missing fact. Act only on `final`.
    */
   async create(
     params: TaxDecisionCreateParams,

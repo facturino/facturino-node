@@ -1,0 +1,143 @@
+{
+  "categories": ["goods", "services", "electronically_supplied_services", "deposit", "ancillary_costs", "future_supply_category"],
+  "productCreate": {
+    "name": "Training",
+    "unitPrice": 10000,
+    "vatRate": 0,
+    "vatCode": "E",
+    "vatexCode": "VATEX-FR-CGI261-4",
+    "unit": "hour",
+    "kind": "service",
+    "supplyCategory": "services",
+    "reference": "TRAINING",
+    "category": "courses",
+    "tags": ["training"]
+  },
+  "productUpdate": {
+    "kind": "service",
+    "supplyCategory": "electronically_supplied_services",
+    "vatexCode": "VATEX-FR-CGI261-7",
+    "reference": "TRAINING-ONLINE",
+    "category": "online",
+    "tags": ["online"],
+    "active": false
+  },
+  "product": {
+    "id": "prod_supply_sdk",
+    "object": "product",
+    "name": "Training",
+    "unitPrice": 10000,
+    "vatRate": 0,
+    "vatCode": "E",
+    "vatexCode": "VATEX-FR-CGI261-4",
+    "unit": "hour",
+    "kind": "service",
+    "supplyCategory": "services",
+    "reference": "TRAINING",
+    "category": "courses",
+    "tags": ["training"],
+    "priceHistory": [],
+    "active": true,
+    "livemode": false,
+    "created": "2026-10-24T12:00:00.000Z",
+    "updated": "2026-10-24T12:00:00.000Z"
+  },
+  "quoteLineInput": {
+    "description": "Online subscription",
+    "quantity": "1",
+    "unit": "month",
+    "unitPrice": 10000,
+    "vatRate": 2000,
+    "vatCode": "S",
+    "kind": "service",
+    "supplyCategory": "electronically_supplied_services"
+  },
+  "quote": {
+    "id": "quo_supply_sdk",
+    "object": "quote",
+    "customer": { "ref": "cus_supply_sdk", "snapshot": { "name": "SDK customer" } },
+    "status": "draft",
+    "number": "QUO-SDK-001",
+    "currency": "eur",
+    "versionNumber": 1,
+    "isLatestVersion": true,
+    "viewCount": 0,
+    "items": [
+      {
+        "id": "li_supply_sdk",
+        "description": "Online subscription",
+        "quantity": "1",
+        "unit": "month",
+        "unitPrice": 10000,
+        "discountPercent": 0,
+        "lineAmount": 10000,
+        "vatRate": 2000,
+        "vatCode": "S",
+        "vatAmount": 2000,
+        "lineTotal": 12000,
+        "product": null,
+        "kind": "service",
+        "supplyCategory": "electronically_supplied_services"
+      }
+    ],
+    "totals": {
+      "totalHT": 10000,
+      "discountAmount": 0,
+      "vatBreakdown": [{ "rate": 2000, "code": "S", "base": 10000, "amount": 2000 }],
+      "totalVAT": 2000,
+      "totalTTC": 12000,
+      "amountDue": 12000,
+      "amountPaid": 0
+    },
+    "dates": { "issued": "2026-10-24", "validUntil": "2026-11-24" },
+    "livemode": false,
+    "created": "2026-10-24T12:00:00.000Z",
+    "updated": "2026-10-24T12:00:00.000Z"
+  },
+  "draftLine": {
+    "reference": "line-1",
+    "description": "Online subscription",
+    "quantity": "1",
+    "unit": "month",
+    "unitPrice": 10000,
+    "rateCategory": "standard"
+  },
+  "pendingLine": {
+    "reference": "line-1",
+    "description": "Online subscription",
+    "category": null,
+    "relatedCategory": null,
+    "effectiveCategory": null,
+    "quantity": "1",
+    "unitAmount": 10000,
+    "discount": null,
+    "rateCategory": "standard",
+    "placeOfSupplyRule": "general",
+    "goodsMovement": null,
+    "treatment": null,
+    "vatCategoryCode": null,
+    "vatexCode": null,
+    "legalMention": null,
+    "rateCentipercent": null,
+    "rateBasis": null,
+    "placeOfSupply": null,
+    "placeOfSupplyReference": null,
+    "treatmentReference": null,
+    "amountHT": null,
+    "amountVAT": null,
+    "amountTTC": null,
+    "invoiceChannel": null,
+    "transactionReporting": null,
+    "paymentReporting": null
+  },
+  "notice": {
+    "code": "supply_category_not_declared",
+    "message": "Both service readings give the same complete tax result; services was retained. Declare the supply category for future operations.",
+    "lineId": "line-1"
+  },
+  "issue": {
+    "code": "supply_category_not_declared",
+    "message": "The two service readings give different complete tax results. Declare the line's supplyCategory.",
+    "lineId": "line-1"
+  }
+}

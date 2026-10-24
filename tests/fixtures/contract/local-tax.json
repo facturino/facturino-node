@@ -1,0 +1,36 @@
+{
+  "registration": {
+    "territory": "MF",
+    "reference": "registration_mf_1",
+    "effectiveFrom": "2026-09-01",
+    "effectiveTo": null
+  },
+  "futureRegistration": {
+    "territory": "FUTURE",
+    "reference": "registration_future_1",
+    "effectiveFrom": "2026-09-01",
+    "effectiveTo": "2026-12-31"
+  },
+  "tax": {
+    "code": "tgca_mf",
+    "rateCentipercent": 400,
+    "amount": 400,
+    "reference": "CGIsm art. 252",
+    "exemption": null
+  },
+  "exemptTax": {
+    "code": "tgca_mf",
+    "rateCentipercent": 0,
+    "amount": 0,
+    "reference": "CGIsm art. 253",
+    "exemption": "cgism_253"
+  },
+  "futureTax": {
+    "code": "future_local_tax",
+    "rateCentipercent": 125,
+    "amount": 125,
+    "reference": "future_local_tax_rule",
+    "exemption": "future_exemption"
+  },
+  "exemptions": ["cgism_253", "not_used_in_saint_martin", "future_exemption"]
+}

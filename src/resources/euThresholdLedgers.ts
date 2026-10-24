@@ -35,6 +35,10 @@ import type {
  * Sales made elsewhere are never assumed absent: under `mixed_channels` they
  * enter through adjustments, and the ledger serves a decision only up to the day
  * those channels are declared complete through.
+ * A threshold not declared leaves `pending_verification`
+ * (`eu_threshold_state_missing`), without amounts. When destination VAT is due
+ * without a declared mechanism, it is invoiced and `destination_mechanism_missing`
+ * is a notice explaining how to register.
  *
  * The ledger is append-only: there is no update and no delete. Giving an amount
  * back is a qualified CORRECTION, which names the movement it corrects; what

@@ -67,7 +67,11 @@ export class Quotes {
     return this.client.post<Quote>(`/v1/quotes/${id}/refuse`, undefined, options)
   }
 
-  /** Convert accepted quote to draft invoice. */
+  /**
+   * Convert an accepted quote to a commercial draft invoice. Declared line
+   * `supplyCategory` values are copied unchanged; omissions stay undeclared.
+   * Bind a final tax decision to this draft before finalizing it.
+   */
   async convert(id: string, options?: RequestOptions): Promise<Invoice> {
     return this.client.post<Invoice>(`/v1/quotes/${id}/convert`, undefined, options)
   }
