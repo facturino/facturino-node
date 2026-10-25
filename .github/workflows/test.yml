@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -33,3 +33,33 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # The package supports Node 18 (`engines`), but the test runner needs Node 20+:
+  # build once, then load both entry points of the built package on Node 18.
+  node18-runtime:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 (build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup Node.js 18 (runtime)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Load the built package
+        run: |
+          node --version
+          node -e "const sdk = require('./dist/cjs/index.js'); if (typeof sdk.Facturino !== 'function') process.exit(1)"
+          node --input-type=module -e "const sdk = await import('./dist/esm/index.js'); if (typeof sdk.Facturino !== 'function') process.exit(1)"
