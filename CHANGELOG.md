@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/) and
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-26
+
+### Added
+- Read-only `EReporting.obligationBasis` (`legal` or `voluntary_early_adoption`), `obligationDueFrom` (the legal start date of the seller's wave, `YYYY-MM-DD`) and `acknowledgedBy` (`administration` or `platform`), independent of acceptance. Each field is nullable and may be absent on historical declarations.
+- Read-only `TaxDecision.obligationBasis` and `taxSnapshot.obligationBasis` on invoices and credit notes: the transmission basis frozen with the decision, nullable and optional on historical responses. The API contract date remains 2026-09-01: every addition is compatible.
+- `EReportingState` accepts `skipped` and `EReporting` exposes read-only `skippedReason` (optional, nullable string): `nothing_to_declare` closes a declaration locally without transmission, with a `completed` obligation, when no payment data is expected for operations outside French VAT scope.
+
 ## [2.11.1] - 2026-10-25
 
 ### Fixed

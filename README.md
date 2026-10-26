@@ -178,6 +178,7 @@ amount: {
 | `invoiceChannel` | `einvoicing` or `none` — whether the invoice travels the network. |
 | `transactionReporting` | `ereporting`, `none` or `outside_scope`. |
 | `paymentReporting` | `fr212`, `ereporting` or `none`. |
+| `obligationBasis` | Read-only transmission basis frozen with the decision: `legal` (legal obligation), `voluntary_early_adoption` (the seller opted in early), or `null` when no obligation applies or historical information is unresolved. Historical decisions may omit it. |
 | `settledObligations` | The axes French law settles DESPITE a non-final decision. `null` when final — the three axes above are then the settled ones. Each axis inside is `null` when it depends on the treatment that could not be concluded. It authorises nothing. |
 | `foreignTaxReviewRequired` | A foreign tax may apply; review it outside Facturino. |
 | `vies` | VIES status only (`valid`, `invalid`, `unavailable`, `invalid_format`). |
@@ -225,6 +226,10 @@ Codes and `detailCode` values are open strings: treat an unknown notice code as
 a generic notice. Invoices and credit notes freeze the notices of their decision
 in `taxSnapshot.notices`;
 a credit note repeats those of the invoice it credits.
+
+`taxSnapshot.obligationBasis` also freezes the decision's transmission basis on
+invoices and credit notes: `legal`, `voluntary_early_adoption` or `null`. It is
+read-only and may be absent on historical documents.
 
 ### Buyer status and legal presumptions
 
@@ -759,6 +764,25 @@ This applies to lines read from quotes and drafts. **Every line sent directly
 to `POST /v1/tax-decisions` still requires `category`, under both sources.**
 Historical decision lines keep their category. API contract date remains
 2026-09-01.
+
+## E-reporting declarations
+
+Declarations expose the following read-only fields alongside `state` and
+`status`. Each accepts `null` and may be absent on historical responses.
+
+| Field | Meaning |
+|---|---|
+| `obligationBasis` | Frozen transmission basis: `legal` for a legal obligation, `voluntary_early_adoption` when the seller opted in early, or `null` when no obligation applies or historical information is unresolved. |
+| `obligationDueFrom` | Legal start date of the seller's wave (`YYYY-MM-DD`), frozen at reservation; `null` when unresolved. A batch spanning several waves keeps the earliest date. |
+| `acknowledgedBy` | Identified acknowledgement author: `administration` (PPF) or `platform`; `null` without an identified acknowledgement, including historical declarations. This is independent of acceptance. |
+| `skippedReason` | Non-transmission reason. `nothing_to_declare` with `state: skipped` means local closure without transmission and `obligation.state: completed`: no payment data is expected for operations outside French VAT scope (category `O`). |
+
+The summary `status: skipped` alone does not establish closure: it can also
+represent a `blocked` declaration whose obligation remains due. Read `state`,
+`skippedReason` and `obligation` together.
+
+These fields are returned by the API; declaration creation parameters stay the
+same. The API contract date remains 2026-09-01.
 
 ## Resources
 

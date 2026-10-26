@@ -1631,16 +1631,22 @@ export type EReportingType =
   | 'b2c' | 'international' | 'intra_eu' | 'domestic_b2b'
   | 'payment_b2c' | 'payment_international' | 'payment_intra_eu' | 'payment_domestic_b2b'
 /**
- * SUMMARY projection of `state`: `reserved` → `draft`, `blocked` → `skipped`,
+ * SUMMARY projection of `state`: `reserved` → `draft`, `blocked` or `skipped` → `skipped`,
  * `acknowledged` → `submitted` (the platform's technical acknowledgement is not
  * an acceptance). `accepted` is the administration's acceptance as reported by
  * the platform; `rejected` carries its reason in `paRejectionReason`.
+ * The summary `skipped` alone does not establish closure: read `state`,
+ * `skippedReason` and `obligation`.
  */
 export type EReportingStatus = 'draft' | 'submitted' | 'accepted' | 'rejected' | 'skipped'
-/** Actual state of a declaration. `reserved` means NOTHING has been transmitted yet. */
+/**
+ * Actual state of a declaration. `reserved` means NOTHING has been transmitted yet.
+ * `skipped` closes it locally without transmission: `skippedReason` is
+ * `nothing_to_declare` and `obligation.state` is `completed`.
+ */
 export type EReportingState =
   | 'reserved' | 'submitting' | 'queued' | 'submitted' | 'acknowledged'
-  | 'accepted' | 'rejected' | 'blocked' | 'reconciliation_required'
+  | 'accepted' | 'rejected' | 'blocked' | 'skipped' | 'reconciliation_required'
 export type EReportingVolet = 'transaction' | 'payment'
 export type EReportingBlockedReason =
   | (string & {})
@@ -1690,11 +1696,19 @@ export interface EReporting {
   paRejectionCode?: string | null
   /** Read-only follow-up; absent on historical responses. */
   obligation?: ObligationFollowUp | null
+  /** Read-only frozen transmission basis; null when none or unresolved, absent on historical responses. */
+  obligationBasis?: 'legal' | 'voluntary_early_adoption' | null
+  /** Read-only legal start of the seller's wave (YYYY-MM-DD), frozen at reservation; null if unresolved, absent on historical responses. */
+  obligationDueFrom?: string | null
+  /** Read-only acknowledgement author (PPF or platform), independent of acceptance; null if unknown, absent on historical responses. */
+  acknowledgedBy?: 'administration' | 'platform' | null
   id: string
   object: 'ereporting'
   /** Summary derived from `state` — never an authority of its own. */
   status: EReportingStatus
   state: EReportingState
+  /** Read-only non-transmission reason; `nothing_to_declare` closes a skipped declaration locally with a completed obligation. Nullable, absent on historical responses. */
+  skippedReason?: string | null
   type: EReportingType
   volet: EReportingVolet
   period: string
@@ -3168,6 +3182,8 @@ export interface TaxDecision {
   invoiceChannel: InvoiceChannel | null
   transactionReporting: TransactionReporting | null
   paymentReporting: PaymentReporting | null
+  /** Read-only frozen transmission basis; null when none or unresolved, absent on historical decisions. */
+  obligationBasis?: 'legal' | 'voluntary_early_adoption' | null
   /**
    * Obligation axes French law settles DESPITE a non-final decision.
    *
@@ -3270,6 +3286,8 @@ export interface TaxSnapshot {
   invoiceChannel?: InvoiceChannel | null
   transactionReporting?: TransactionReporting | null
   paymentReporting?: PaymentReporting | null
+  /** Read-only transmission basis frozen with the decision; null when none or unresolved, absent on historical documents. */
+  obligationBasis?: 'legal' | 'voluntary_early_adoption' | null
   amountToChargeCents?: number
   /**
    * The final decision's notices, FROZEN with it: the retained result and the

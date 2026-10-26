@@ -19,6 +19,18 @@ const diagnose = (source: string): string[] => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('actual server response corpus', () => {
+  const declaration = (fields: object) => ({
+    id: 'erp_basis', object: 'ereporting', status: 'submitted', state: 'acknowledged',
+    type: 'b2c', volet: 'transaction', period: '2026-10',
+    periodStart: '2026-10-01', periodEnd: '2026-10-31',
+    totalHT: 10000, totalTVA: 2000, totalTTC: 12000,
+    lines: [{ category: 'services', amount: 10000, vatRate: 2000, vatAmount: 2000, date: '2026-10-26', count: 1 }],
+    attempt: 1, blockedReason: null, paRejectionReason: null, reconciliationReason: null,
+    supersedesDeclarationId: null, supersededByDeclarationId: null,
+    livemode: false, created: '2026-10-26T10:00:00.000Z', updated: '2026-10-26T10:00:00.000Z',
+    ...fields,
+  })
+
   it.each(Object.keys(resources))('deserializes %s through the resource', async name => {
     const body = fixture(name)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)))
@@ -71,6 +83,148 @@ describe('actual server response corpus', () => {
     expect(fixture('taxDecision').customer).toHaveProperty('retainedVatNumber', null)
     expect(fixture('invoice').taxSnapshot.notices).toEqual([])
     expect(fixture('creditNote').taxSnapshot.notices).toEqual([])
+  })
+
+  describe('frozen transmission basis and acknowledgement', () => {
+    const cases = [
+      { name: 'legal obligation', fields: { obligationBasis: 'legal', obligationDueFrom: '2026-09-01', acknowledgedBy: 'administration' } },
+      { name: 'voluntary early adoption', fields: { obligationBasis: 'voluntary_early_adoption', obligationDueFrom: '2027-09-01', acknowledgedBy: 'platform' } },
+      { name: 'explicit null', fields: { obligationBasis: null, obligationDueFrom: null, acknowledgedBy: null } },
+      { name: 'historical omission', fields: {} },
+    ]
+    const decision = (fields: object) => {
+      const body = fixture('taxDecision')
+      delete body.obligationBasis
+      return { ...body, ...fields }
+    }
+    const document = (name: string, fields: object) => {
+      const body = fixture(name)
+      delete body.taxSnapshot.obligationBasis
+      return { ...body, taxSnapshot: { ...body.taxSnapshot, ...fields } }
+    }
+    const basisFields = (fields: object) => 'obligationBasis' in fields ? { obligationBasis: fields.obligationBasis } : {}
+
+    it('keeps the shared decision and invoice basis values', () => {
+      expect(fixture('taxDecision').obligationBasis).toBe('legal')
+      // The shared invoice is bound to a historical decision: the basis is omitted, not null.
+      expect(fixture('invoice').taxSnapshot).not.toHaveProperty('obligationBasis')
+    })
+
+    it('type checks populated, null and historical declarations, decisions and document snapshots', () => {
+      const invoices = cases.map(({ fields }) => document('invoice', basisFields(fields)))
+      const creditNotes = cases.map(({ fields }) => document('creditNote', basisFields(fields)))
+      const source = `import type { EReporting, TaxDecision, TaxSnapshot, Invoice, CreditNote } from '../src/index.js';\n`
+        + `const declarations: EReporting[] = ${JSON.stringify(cases.map(({ fields }) => declaration(fields)))};\n`
+        + `const decisions: TaxDecision[] = ${JSON.stringify(cases.map(({ fields }) => decision(basisFields(fields))))};\n`
+        + `const invoices: Invoice[] = ${JSON.stringify(invoices)};\n`
+        + `const creditNotes: CreditNote[] = ${JSON.stringify(creditNotes)};\n`
+        + `const snapshots: TaxSnapshot[] = ${JSON.stringify([...invoices, ...creditNotes].map(body => body.taxSnapshot))};\n`
+        + `const basis: 'legal' | 'voluntary_early_adoption' | null | undefined = declarations[0].obligationBasis;\n`
+        + `const dueFrom: string | null | undefined = declarations[0].obligationDueFrom;\n`
+        + `const author: 'administration' | 'platform' | null | undefined = declarations[0].acknowledgedBy;\n`
+        + `const decisionBasis: typeof basis = decisions[0].obligationBasis;\n`
+        + `const snapshotBasis: typeof basis = snapshots[0].obligationBasis;\n`
+        + `void [invoices, creditNotes, dueFrom, author, decisionBasis, snapshotBasis];`
+      expect(diagnose(source)).toEqual([])
+    })
+
+    it('rejects invalid response values and keeps read-only fields out of write parameters', () => {
+      const invalid = [
+        ["EReporting['obligationBasis']", 'voluntary'], ["EReporting['obligationBasis']", 1],
+        ["EReporting['obligationDueFrom']", 20260901],
+        ["EReporting['acknowledgedBy']", 'accepted'], ["EReporting['acknowledgedBy']", false],
+        ["TaxDecision['obligationBasis']", 'platform'], ["TaxDecision['obligationBasis']", true],
+        ["TaxSnapshot['obligationBasis']", 'administration'], ["TaxSnapshot['obligationBasis']", 1],
+        ['keyof EReportingCreateParams', 'obligationBasis'],
+        ['keyof EReportingCreateParams', 'obligationDueFrom'],
+        ['keyof EReportingCreateParams', 'acknowledgedBy'],
+        ['keyof TaxDecisionCreateParams', 'obligationBasis'],
+        ['keyof InvoiceCreateParams', 'obligationBasis'],
+        ['keyof CreditNoteCreateParams', 'obligationBasis'],
+      ]
+      const source = `import type { EReporting, TaxDecision, TaxSnapshot, EReportingCreateParams, TaxDecisionCreateParams, InvoiceCreateParams, CreditNoteCreateParams } from '../src/index.js';\n`
+        + invalid.map(([type, value], i) => `// @ts-expect-error Invalid contract value must be rejected\nconst invalid${i}: ${type} = ${JSON.stringify(value)};\n`).join('')
+      expect(diagnose(source)).toEqual([])
+    })
+
+    it.each(cases)('reads a declaration with $name without inferring acceptance or defaults', async ({ fields }) => {
+      const body = declaration(fields)
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)))
+      const actual = await new Facturino('fac_test_corpus').ereporting.get(body.id)
+      expect(actual).toEqual(body)
+      expect(actual.state).toBe('acknowledged')
+      expect(actual.status).toBe('submitted')
+      for (const key of ['obligationBasis', 'obligationDueFrom', 'acknowledgedBy'] as const) {
+        if (key in fields) expect(actual).toHaveProperty(key, fields[key])
+        else expect(actual).not.toHaveProperty(key)
+      }
+    })
+
+    it.each(cases)('reads $name on a decision and the invoice and credit-note snapshots', async ({ fields }) => {
+      const basis = basisFields(fields)
+      const decided = decision(basis), invoice = document('invoice', basis), creditNote = document('creditNote', basis)
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce(response(decided))
+        .mockResolvedValueOnce(response(invoice))
+        .mockResolvedValueOnce(response(creditNote)))
+      const client = new Facturino('fac_test_corpus')
+      const actualDecision = await client.taxDecisions.get(decided.id)
+      const actualInvoice = await client.invoices.get(invoice.id)
+      const actualCreditNote = await client.creditNotes.get(creditNote.id)
+      expect(actualDecision).toEqual(decided)
+      expect(actualInvoice).toEqual(invoice)
+      expect(actualCreditNote).toEqual(creditNote)
+      for (const actual of [actualDecision, actualInvoice.taxSnapshot, actualCreditNote.taxSnapshot]) {
+        if ('obligationBasis' in basis) expect(actual).toHaveProperty('obligationBasis', basis.obligationBasis)
+        else expect(actual).not.toHaveProperty('obligationBasis')
+      }
+    })
+  })
+
+  describe('local e-reporting closure without transmission', () => {
+    const skipped = declaration({
+      id: 'erp_skipped', status: 'skipped', state: 'skipped', skippedReason: 'nothing_to_declare',
+      type: 'payment_international', volet: 'payment',
+      totalHT: 0, totalTVA: 0, totalTTC: 0, lines: [],
+      obligation: { state: 'completed', reasonCode: null, reasonSource: null, owner: null, action: null, nextAttemptAt: null },
+    })
+    const cases = [
+      { name: 'explicit null', body: declaration({ skippedReason: null }) },
+      { name: 'historical omission', body: declaration({ status: 'skipped', state: 'blocked', blockedReason: 'pa_not_supported' }) },
+    ]
+
+    it('reads a skipped declaration with nothing to declare and a completed obligation', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(skipped)))
+      const actual = await new Facturino('fac_test_corpus').ereporting.get(skipped.id)
+      expect(actual).toEqual(skipped)
+      expect(actual.state).toBe('skipped')
+      expect(actual.skippedReason).toBe('nothing_to_declare')
+      expect(actual.obligation?.state).toBe('completed')
+      expect(actual).not.toHaveProperty('submittedAt')
+      expect(actual).not.toHaveProperty('paResponseId')
+    })
+
+    it.each(cases)('preserves $name without inferring local closure', async ({ body }) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)))
+      const actual = await new Facturino('fac_test_corpus').ereporting.get(body.id)
+      expect(actual).toEqual(body)
+      if ('skippedReason' in body) expect(actual).toHaveProperty('skippedReason', null)
+      else expect(actual).not.toHaveProperty('skippedReason')
+      expect(actual.obligation?.state).not.toBe('completed')
+    })
+
+    it('type checks skipped, null and historical responses with an open read-only reason', () => {
+      const source = `import type { EReporting, EReportingState, EReportingCreateParams } from '../src/index.js';\n`
+        + `const declarations: EReporting[] = ${JSON.stringify([skipped, ...cases.map(({ body }) => body)])};\n`
+        + `const state: EReportingState = 'skipped';\n`
+        + `const reason: string | null | undefined = declarations[0].skippedReason;\n`
+        + `const fromApi: string = 'future_reason';\nconst future: EReporting['skippedReason'] = fromApi;\n`
+        + `// @ts-expect-error Non-transmission reasons must remain strings\nconst number: EReporting['skippedReason'] = 1;\n`
+        + `// @ts-expect-error Non-transmission reasons must remain strings\nconst boolean: EReporting['skippedReason'] = false;\n`
+        + `// @ts-expect-error Read-only response fields are not creation parameters\nconst input: keyof EReportingCreateParams = 'skippedReason';\n`
+        + `void [declarations, state, reason, future];`
+      expect(diagnose(source)).toEqual([])
+    })
   })
 
   describe('product and quote supply categories', () => {
@@ -403,7 +557,9 @@ describe('actual server response corpus', () => {
     it('reads every frozen consultation field through the resource', async () => {
       const body = fixture('legal-category')
       const { legalCategory, ...original } = body
-      expect(original).toEqual(fixture('taxDecision'))
+      // This consultation sample predates the frozen transmission basis.
+      const { obligationBasis, ...historical } = fixture('taxDecision')
+      expect(original).toEqual(historical)
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)))
       const decision = await new Facturino('fac_test_corpus').taxDecisions.get(body.id)
       expect(decision).toEqual(body)
