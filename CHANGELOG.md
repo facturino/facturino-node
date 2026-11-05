@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/) and
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-11-05
+
+### Fixed
+- `LegalForm.sigle` is optional, as the API contract publishes it. The API accepts and returns every category of the INSEE nomenclature (level III); the categories without a usual acronym carry only their `code` and `label`. Read `sigle` as possibly absent.
+
 ## [2.12.0] - 2026-10-26
 
 ### Added

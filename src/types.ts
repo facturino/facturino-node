@@ -2078,7 +2078,8 @@ export interface ValidateResponse {
 
 export interface LegalForm {
   code: string
-  sigle: string
+  /** Usual acronym (e.g. "SAS"). Absent on the INSEE categories that have none. */
+  sigle?: string
   label: string
 }
 

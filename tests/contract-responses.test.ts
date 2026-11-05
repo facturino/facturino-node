@@ -753,3 +753,15 @@ describe('actual server response corpus', () => {
     expect(String(request.mock.calls[1][0])).toContain('starting_after=inv_deleted')
   })
 })
+
+describe('INSEE legal forms', () => {
+  it('types the sigle as absent on the categories that have no usual acronym', () => {
+    const source = `import type { LegalForm, LegalFormInput } from '../src/index.js';\n`
+      + `const listed: LegalForm[] = [{ code: '5710', sigle: 'SAS', label: 'SAS, société par actions simplifiée' }, { code: '3120', label: 'Société commerciale étrangère immatriculée au RCS' }];\n`
+      + `const sigle: string | undefined = listed[1].sigle;\n`
+      + `const inputs: LegalFormInput[] = [{ code: '3120' }, { sigle: 'SAS' }];\n`
+      + `// @ts-expect-error The sigle may be absent: read it as optional.\nconst required: string = listed[1].sigle;\n`
+      + `void [sigle, inputs, required];`
+    expect(diagnose(source)).toEqual([])
+  })
+})
