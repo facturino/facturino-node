@@ -9,12 +9,16 @@ export class Jobs {
     return this.client.get<Job>(`/v1/jobs/${id}`)
   }
 
-  /** Poll until completed or failed. */
+  /**
+   * Poll until the job leaves `pending` and `processing`: `completed`,
+   * `completed_with_errors` (partial invoice export), `failed`, `superseded`,
+   * or a status added later.
+   */
   async poll(id: string, intervalMs = 2000, maxAttempts = 30): Promise<Job> {
     for (let i = 0; i < maxAttempts; i++) {
       const job = await this.get(id)
 
-      if (job.status === 'completed' || job.status === 'failed') {
+      if (job.status !== 'pending' && job.status !== 'processing') {
         return job
       }
 

@@ -252,7 +252,10 @@ export class Invoices {
     return this.client.get(url)
   }
 
-  /** Async audit trail PDF generation. */
+  /**
+   * Not available yet: the API answers 501 `not_implemented` and creates no
+   * job. Use the JSON audit trail (`getAuditTrail`) meanwhile.
+   */
   async generateAuditTrailPdf(id: string, options?: RequestOptions): Promise<JobResponse> {
     return this.client.post<JobResponse>(`/v1/invoices/${id}/audit-trail/pdf`, undefined, options)
   }

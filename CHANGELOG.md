@@ -4,7 +4,18 @@ All notable changes to `@facturino/node` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [2.13.0] - 2026-11-13
+
+### Fixed
+- `RevenueReport` and its `breakdown` items use the names the API sends: `revenue.creditNotes`, `invoiceCount` and `creditNoteCount`. The snake_case names (`revenue.credit_notes`, `invoice_count`, `credit_note_count`) were never sent; they stay as optional `@deprecated` fields so existing code keeps compiling.
+- `jobs.poll()` returns as soon as the job leaves `pending` and `processing`. It used to wait only for `completed` or `failed`, so a partial invoice export (`completed_with_errors`) or a `superseded` render was polled until the attempts ran out, then threw.
+
+### Added
+- `JobType` accepts `invoice_export`. `Job` exposes the optional `included`, `failed` and `truncated` fields of an invoice export, and `JobResponse` exposes `truncated`.
+
+### Changed
+- `invoices.generateAuditTrailPdf()` is documented as not available yet: the API answers 501 `not_implemented` and creates no job. Use `invoices.getAuditTrail()` meanwhile.
+- `exports.exportInvoices()` documentation: without `statuses`, credit notes are included in the `avoirs/` folder of the ZIP, `manifest.csv` carries additional columns, and the archive is limited to 5 000 pieces (`truncated: true` on the job).
 
 ## [2.12.1] - 2026-11-05
 

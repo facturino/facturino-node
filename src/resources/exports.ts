@@ -25,6 +25,10 @@ export class Exports {
    * Bulk export finalized invoices as a ZIP (Factur-X PDF + CII XML per invoice).
    * Available on all plans. Optionally filter by issue-date period and/or
    * lifecycle statuses; with no params, every non-draft invoice is exported.
+   * Without `statuses`, credit notes are included too (`avoirs/` folder of the
+   * ZIP). `manifest.csv` lists every piece with its type, totals, due date,
+   * payment status and linked invoice. The archive holds at most 5 000
+   * pieces; beyond that the job carries `truncated: true`.
    */
   async exportInvoices(params?: InvoiceExportParams, options?: RequestOptions): Promise<JobResponse> {
     return this.client.post<JobResponse>('/v1/exports/invoices', params ?? {}, options)

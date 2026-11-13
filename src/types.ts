@@ -709,6 +709,8 @@ export interface JobResponse {
   url?: string
   /** ISO 8601 expiry of the signed URL. */
   expiresAt?: string
+  /** `invoice_export` only: `true` when the archive was limited to 5 000 pieces. */
+  truncated?: boolean
 }
 
 export interface PaymentLinkResponse {
@@ -1619,7 +1621,10 @@ export interface InvoiceExportParams {
   period_start?: string
   /** Upper bound on the invoice issue date (inclusive), YYYY-MM-DD. */
   period_end?: string
-  /** Restrict to these lifecycle statuses. Defaults to every non-draft status. */
+  /**
+   * Restrict to these invoice statuses. Without `statuses`, every non-draft
+   * status is exported and credit notes are included too.
+   */
   statuses?: string[]
 }
 
@@ -1750,7 +1755,7 @@ export interface EReportingListParams extends PaginationParams {
 // Job
 // ---------------------------------------------------------------------------
 
-export type JobType = 'pdf' | 'facturx' | 'fec' | 'export' | 'rgpd_export' | 'audit_trail_pdf'
+export type JobType = 'pdf' | 'facturx' | 'fec' | 'export' | 'invoice_export' | 'rgpd_export' | 'audit_trail_pdf'
 /**
  * `superseded` is a TERMINAL state without a deliverable: the render was
  * produced for a ledger revision that a collection, a cancellation or a refund
@@ -1778,6 +1783,12 @@ export interface Job {
   url?: string
   /** ISO 8601 expiry of the signed `url`. */
   expiresAt?: string
+  /** `invoice_export` only: pieces in the archive. */
+  included?: number
+  /** `invoice_export` only: pieces that could not be generated. */
+  failed?: number
+  /** `invoice_export` only: `true` when the archive was limited to 5 000 pieces. */
+  truncated?: boolean
   created: string
 }
 
@@ -1905,15 +1916,22 @@ export interface RevenueReportBreakdownItem {
   period: string
   revenue: {
     invoiced: number
-    credit_notes: number
+    /** Credit notes total, TTC, in integer cents (negative). */
+    creditNotes: number
+    /** @deprecated Never sent by the API. Read `creditNotes`. */
+    credit_notes?: number
     net: number
   }
   payments: {
     received: number
     outstanding: number
   }
-  invoice_count: number
-  credit_note_count: number
+  invoiceCount: number
+  /** @deprecated Never sent by the API. Read `invoiceCount`. */
+  invoice_count?: number
+  creditNoteCount: number
+  /** @deprecated Never sent by the API. Read `creditNoteCount`. */
+  credit_note_count?: number
 }
 
 export interface RevenueReport {
@@ -1921,15 +1939,22 @@ export interface RevenueReport {
   period: { start: string; end: string }
   revenue: {
     invoiced: number
-    credit_notes: number
+    /** Credit notes total, TTC, in integer cents (negative). */
+    creditNotes: number
+    /** @deprecated Never sent by the API. Read `creditNotes`. */
+    credit_notes?: number
     net: number
   }
   payments: {
     received: number
     outstanding: number
   }
-  invoice_count: number
-  credit_note_count: number
+  invoiceCount: number
+  /** @deprecated Never sent by the API. Read `invoiceCount`. */
+  invoice_count?: number
+  creditNoteCount: number
+  /** @deprecated Never sent by the API. Read `creditNoteCount`. */
+  credit_note_count?: number
   breakdown?: RevenueReportBreakdownItem[]
 }
 
